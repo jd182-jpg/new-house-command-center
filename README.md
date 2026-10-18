@@ -53,20 +53,15 @@ state = {
 
 ## Deploy
 
-Heads up: `js/seed-data.js` holds your address, your HOA contact, and your agent's phone number. If you publish from a **public** repo, anyone can read that file. Your own edits and Wi-Fi passwords stay in your browser either way and are never uploaded.
+Live at **https://jd182-jpg.github.io/new-house-command-center/** (GitHub Pages, public repo `jd182-jpg/new-house-command-center`).
 
-**Option A: Netlify Drop (no account settings, keeps the repo private)**
-1. Go to https://app.netlify.com/drop
-2. Drag the `new-house-command-center` folder onto the page.
-3. You get a live URL in a few seconds. Rename the site from Site settings if you like.
-
-**Option B: GitHub Pages (same flow as your other apps)**
+Every push to `main` redeploys automatically in about a minute:
 
 ```bash
-gh repo create new-house-command-center --public --source=. --push && gh api -X POST repos/jd182-jpg/new-house-command-center/pages -f "source[branch]=main" -f "source[path]=/"
+git push
 ```
 
-The site goes live at https://jd182-jpg.github.io/new-house-command-center/ about a minute later. Free GitHub accounts only serve Pages from public repos, so strip the contacts out of the seed file first if that bothers you.
+Your own edits and Wi-Fi passwords live only in your browser and are never in the repo. The seed file is public, though, so keep secrets out of `js/seed-data.js`.
 
 ## Moving data between devices
 
