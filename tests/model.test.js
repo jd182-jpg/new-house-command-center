@@ -5,6 +5,7 @@ import {
   createItem, createTask, buildStateFromSeed, normalizeState, budgetSummary, roomSummaries,
   itemTotal, effectiveUnitPrice, taskProgress, shoppingProgress, overallProgress, doNext,
   daysUntil, isOverdue, reorder, fitCheck, stairWarning, wifiQrPayload, TASK_CATEGORIES,
+  reconcile, stampUpdated, toSyncPayload, SECRET_HOME_KEYS,
 } from '../js/model.js';
 
 const NOW = new Date(2026, 9, 17); // Oct 17 2026, local time
@@ -191,4 +192,96 @@ test('normalizeState rejects junk and survives partial imports', () => {
   assert.equal(s.settings.theme, 'auto');
   assert.equal(s.tasks[0].status, 'To do');
   assert.equal(s.items[0].qty, 1);
+});
+
+// ---------- Sync reconcile ----------
+
+const withHome = (updatedAt, homeInfo = {}, settings = {}) => normalizeState({
+  tasks: [{ id: 't1', title: `task at ${updatedAt}` }],
+  items: [],
+  homeInfo,
+  settings,
+  updatedAt,
+});
+
+test('normalizeState keeps updatedAt and defaults it to 0', () => {
+  assert.equal(withHome(1234).updatedAt, 1234);
+  assert.equal(normalizeState({ tasks: [], items: [] }).updatedAt, 0);
+  assert.equal(normalizeState({ tasks: [], items: [], updatedAt: 'x' }).updatedAt, 0);
+  assert.equal(buildStateFromSeed(seed).updatedAt, 0, 'seed data loses to any real copy');
+});
+
+test('stampUpdated always moves forward', () => {
+  const s = withHome(5000);
+  stampUpdated(s, 9000);
+  assert.equal(s.updatedAt, 9000);
+  stampUpdated(s, 100); // clock went backwards
+  assert.equal(s.updatedAt, 9001);
+});
+
+test('reconcile pushes when the cloud document does not exist yet', () => {
+  assert.deepEqual(reconcile(withHome(0), null), { action: 'push' }, 'seed data is pushed as-is');
+  const founded = reconcile(withHome(1), undefined, 9000);
+  assert.equal(founded.action, 'push');
+  assert.equal(founded.state.updatedAt, 9000, 'real data founding the cloud copy is stamped current');
+});
+
+test('pre-sync data on a second device adopts the founding copy instead of tying', () => {
+  const laptop = reconcile(withHome(1), null, 9000).state; // both had pre-sync data (1)
+  assert.equal(reconcile(withHome(1), laptop).action, 'apply');
+});
+
+test('reconcile applies a newer remote copy', () => {
+  const r = reconcile(withHome(100), withHome(200));
+  assert.equal(r.action, 'apply');
+  assert.equal(r.state.updatedAt, 200);
+  assert.equal(r.state.tasks[0].title, 'task at 200');
+});
+
+test('reconcile pushes when this device is newer, so a stale cloud never wins', () => {
+  assert.deepEqual(reconcile(withHome(300), withHome(200)), { action: 'push' });
+});
+
+test('a stale device does nothing to newer data on load', () => {
+  // Fresh phone on seed data (0) meets a laptop copy in the cloud: it adopts, never pushes.
+  assert.equal(reconcile(buildStateFromSeed(seed), withHome(50)).action, 'apply');
+});
+
+test('reconcile does nothing when timestamps match (our own write echoing back)', () => {
+  assert.deepEqual(reconcile(withHome(200), withHome(200)), { action: 'none' });
+});
+
+test('Wi-Fi passwords are stripped from the payload unless opted in', () => {
+  const s = withHome(1, { wifiName: 'Montrose', wifiPassword: 'pw1', guestWifiPassword: 'pw2' });
+  const out = toSyncPayload(s);
+  assert.equal(out.homeInfo.wifiName, 'Montrose');
+  for (const k of SECRET_HOME_KEYS) assert.ok(!(k in out.homeInfo), k);
+  assert.equal(s.homeInfo.wifiPassword, 'pw1', 'local copy is untouched');
+
+  s.settings.syncWifiPasswords = true;
+  assert.equal(toSyncPayload(s).homeInfo.wifiPassword, 'pw1');
+});
+
+test('applying a remote copy without passwords keeps this device\'s passwords', () => {
+  const local = withHome(1, { wifiPassword: 'mine', guestWifiPassword: 'guest' });
+  const remote = toSyncPayload(withHome(2, { wifiName: 'New name', wifiPassword: 'other' }));
+  const { state } = reconcile(local, remote);
+  assert.equal(state.homeInfo.wifiName, 'New name');
+  assert.equal(state.homeInfo.wifiPassword, 'mine');
+  assert.equal(state.homeInfo.guestWifiPassword, 'guest');
+});
+
+test('opted-in remote passwords replace local ones', () => {
+  const local = withHome(1, { wifiPassword: 'old' });
+  const remote = toSyncPayload(withHome(2, { wifiPassword: 'new' }, { syncWifiPasswords: true }));
+  const { state } = reconcile(local, remote);
+  assert.equal(state.homeInfo.wifiPassword, 'new');
+  assert.equal(state.settings.syncWifiPasswords, true);
+});
+
+test('turning on password sync from a device without passwords does not erase them elsewhere', () => {
+  const phone = withHome(1, { wifiPassword: 'phonepw' });
+  const laptop = toSyncPayload(withHome(2, { wifiPassword: '' }, { syncWifiPasswords: true }));
+  const { state } = reconcile(phone, laptop);
+  assert.equal(state.homeInfo.wifiPassword, 'phonepw');
 });

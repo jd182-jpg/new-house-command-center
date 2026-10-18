@@ -113,12 +113,70 @@ export function normalizeState(raw) {
       budget: settings.budget === '' || settings.budget == null ? null : num(settings.budget, null),
       roomBudgets: { ...(settings.roomBudgets || {}) },
       theme: ['light', 'dark', 'auto'].includes(settings.theme) ? settings.theme : 'auto',
+      syncWifiPasswords: settings.syncWifiPasswords === true,
     },
     tasks: raw.tasks.map(createTask),
     items: raw.items.map(createItem),
     homeInfo: raw.homeInfo && typeof raw.homeInfo === 'object' ? raw.homeInfo : {},
     rooms: Array.isArray(raw.rooms) ? raw.rooms : [],
+    // Milliseconds of the last edit. 0 means untouched seed data, so any real copy beats it.
+    updatedAt: Number.isFinite(raw.updatedAt) && raw.updatedAt > 0 ? raw.updatedAt : 0,
   };
+}
+
+// ---------- Sync ----------
+
+// Home Info fields that stay on each device unless syncWifiPasswords is turned on.
+export const SECRET_HOME_KEYS = ['wifiPassword', 'guestWifiPassword'];
+
+// Marks the state as edited now. Always moves forward, even if the clock was set back.
+export function stampUpdated(state, now = Date.now()) {
+  state.updatedAt = Math.max(now, (state.updatedAt || 0) + 1);
+  return state;
+}
+
+// The copy that goes to the cloud: Wi-Fi passwords removed unless the user opted in.
+export function toSyncPayload(state) {
+  const copy = JSON.parse(JSON.stringify(state));
+  if (!copy.settings || !copy.settings.syncWifiPasswords) {
+    for (const k of SECRET_HOME_KEYS) delete copy.homeInfo[k];
+  }
+  return copy;
+}
+
+// Builds the state to adopt from a newer remote copy. When the remote copy does not carry
+// passwords, this device keeps its own. When it does but a password is blank, the local one
+// is kept too, so switching syncing on from a device without passwords can't erase them.
+export function mergeRemote(local, remote) {
+  const next = normalizeState(remote);
+  next.homeInfo = { ...next.homeInfo };
+  const mine = (local && local.homeInfo) || {};
+  for (const k of SECRET_HOME_KEYS) {
+    const keepLocal = !next.settings.syncWifiPasswords || !next.homeInfo[k];
+    if (!keepLocal) continue;
+    if (mine[k] != null) next.homeInfo[k] = mine[k];
+    else delete next.homeInfo[k];
+  }
+  return next;
+}
+
+// Decides what to do when the cloud copy and this device disagree. Strictly by updatedAt:
+//   'apply'  remote is newer, adopt `state`
+//   'push'   this device is newer (or the cloud is empty), upload it
+//   'none'   same timestamp, nothing to do
+// `remote` is null when the cloud document does not exist yet. A device with real edits that
+// founds the cloud copy is stamped as current (`state`), so devices still holding pre-sync
+// data adopt it instead of tying with it. Untouched seed data (0) never claims to be current.
+export function reconcile(local, remote, now = Date.now()) {
+  if (!remote) {
+    const lAt = Number(local && local.updatedAt) || 0;
+    return lAt > 0 ? { action: 'push', state: stampUpdated({ ...local }, now) } : { action: 'push' };
+  }
+  const rAt = Number(remote.updatedAt) || 0;
+  const lAt = Number(local && local.updatedAt) || 0;
+  if (rAt > lAt) return { action: 'apply', state: mergeRemote(local, remote) };
+  if (lAt > rAt) return { action: 'push' };
+  return { action: 'none' };
 }
 
 // ---------- Money ----------

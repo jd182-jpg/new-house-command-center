@@ -2,6 +2,10 @@
 // handles every interaction through a few delegated listeners.
 import * as M from './model.js';
 import { loadState, saveState, resetToSeed, exportJSON, importJSON } from './store.js';
+import { startSync } from './sync.js';
+import { FIREBASE_CONFIG, COLLECTION, DOC_ID } from './sync-config.js';
+
+const SYNC_ON = !!(FIREBASE_CONFIG && FIREBASE_CONFIG.projectId);
 
 let state = loadState();
 const UI_KEY = 'nhcc.ui.v1';
@@ -80,8 +84,53 @@ const ICON = {
 
 function commit(mutator, { render = true } = {}) {
   mutator(state);
+  M.stampUpdated(state);
   saveState(state);
+  sync.push();
   if (render) renderView();
+}
+
+// Swaps in a whole new state (import, reset, or a newer copy from another device).
+function replaceState(next, { push = true } = {}) {
+  state = next;
+  saveState(state);
+  if (push) sync.push();
+  applyTheme();
+  renderSoon();
+}
+
+// A newer copy can arrive while you are typing; wait for the field to lose focus
+// instead of redrawing the page under your cursor.
+let renderPending = false;
+function renderSoon() {
+  const a = document.activeElement;
+  if (a && a.closest('#view') && a.matches('input, textarea, select')) {
+    renderPending = true;
+    return;
+  }
+  renderView();
+}
+document.addEventListener('focusout', () => {
+  if (!renderPending) return;
+  setTimeout(() => {
+    const a = document.activeElement;
+    if (a && a.closest('#view') && a.matches('input, textarea, select')) return;
+    renderPending = false;
+    renderView();
+  }, 0);
+});
+
+function setSyncBadge(label, mode) {
+  const el = $('#sync-badge');
+  if (!el) return;
+  el.dataset.mode = mode;
+  $('#sync-label').textContent = label;
+  el.title = {
+    on: 'Saved to the cloud. Your other devices will match.',
+    wait: 'Changes are saved here and will sync when the connection is back.',
+    off: 'Sync is not set up, so data stays in this browser. See the README.',
+    error: 'Sync is not working right now. Changes are still saved in this browser.',
+  }[mode] || '';
 }
 
 function toast(msg, undo) {
@@ -618,7 +667,11 @@ function viewHome() {
   const contacts = h.contacts || [];
   return `
   <div class="page-head"><div><h1>Home Info</h1><p>The stuff you will Google at 11pm otherwise. Every field is optional.</p></div></div>
-  <div class="card lock-note" style="margin-bottom:16px">${ICON.lock}<div class="small"><b>Stored only in this browser.</b> Nothing here is sent anywhere, and it won't sync to your phone on its own (use Export in Settings). Wi-Fi passwords are fine; bank or email passwords are not.</div></div>
+  <div class="card lock-note" style="margin-bottom:16px">${ICON.lock}<div class="small">${!SYNC_ON
+    ? '<b>Stored only in this browser.</b> Nothing here is sent anywhere, and it won\'t reach your phone on its own (use Export in Settings).'
+    : state.settings.syncWifiPasswords
+      ? '<b>Syncs to your other devices, Wi-Fi passwords included.</b> Turn that off in Settings to keep passwords on each device.'
+      : '<b>Syncs to your other devices, except the Wi-Fi passwords.</b> Those stay in this browser unless you turn on syncing them in Settings.'} Wi-Fi passwords are fine here; bank or email passwords are not.</div></div>
   <div class="grid dash-grid">
     <section class="card span-6"><h2>The house</h2>
       <div class="form-grid">
@@ -704,8 +757,15 @@ function viewSettings() {
     </section>
     <section class="card span-6"><h2>Look</h2>
       <label class="field">Theme<select data-change="setting" data-key="theme">${[['auto', 'Match my device'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => `<option value="${v}"${s.theme === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+      <div class="section-label">Sync</div>
+      ${SYNC_ON ? `<p class="small muted" style="margin-top:0">Changes save to the cloud and show up on your phone and laptop within a few seconds. The newest edit wins, so a device that has been asleep catches up instead of overwriting.</p>
+      <label class="check-inline"><input type="checkbox" data-change="sync-wifi" ${s.syncWifiPasswords ? 'checked' : ''}> Also sync Wi-Fi passwords</label>
+      <p class="small muted">Off by default: the synced copy has no login, so passwords stay on each device unless you turn this on.</p>
+      <div class="toolbar"><button class="btn" data-act="sync-force">Send this device's copy to all devices</button></div>
+      <p class="small muted">Only needed if two devices disagree and both say Synced.</p>`
+      : '<p class="small muted" style="margin-top:0">Not set up yet, so everything stays in this browser. The README has the five minute setup.</p>'}
       <div class="section-label">Your data</div>
-      <p class="small muted" style="margin-top:0">Everything lives in this browser's storage. Export a backup now and then, and use it to move your list to your phone.</p>
+      <p class="small muted" style="margin-top:0">A copy also lives in this browser. Export a backup now and then.</p>
       <div class="toolbar">
         <button class="btn" data-act="export">Export JSON</button>
         <label class="btn">Import JSON<input type="file" accept="application/json,.json" data-change="import" class="sr-only"></label>
@@ -824,11 +884,14 @@ document.addEventListener('click', async (e) => {
       toast('Backup downloaded.');
       break;
     }
+    case 'sync-force':
+      if (!(await confirmAction('Send this copy everywhere?', 'Your other devices will switch to exactly what is on this one.', 'Send it'))) return;
+      commit(() => {}, { render: false });
+      toast('Sent. Other devices will update in a moment.');
+      break;
     case 'reset':
-      if (!(await confirmAction('Reset to seed data?', 'This erases every change you have made and brings back the starter list. Export a backup first if you might want it.', 'Reset'))) return;
-      state = resetToSeed();
-      applyTheme();
-      renderView();
+      if (!(await confirmAction('Reset to seed data?', `This erases every change you have made and brings back the starter list${SYNC_ON ? ' on every synced device' : ''}. Export a backup first if you might want it.`, 'Reset'))) return;
+      replaceState(resetToSeed());
       toast('Fresh start loaded.');
       break;
     default:
@@ -844,6 +907,9 @@ document.addEventListener('change', async (e) => {
     const key = el.dataset.key;
     commit((s) => { s.settings[key] = key === 'budget' ? (el.value === '' ? null : Math.max(0, Number(el.value))) : el.value; });
     if (key === 'theme') applyTheme();
+  } else if (kind === 'sync-wifi') {
+    commit((s) => { s.settings.syncWifiPasswords = el.checked; });
+    toast(el.checked ? 'Wi-Fi passwords will sync.' : 'Wi-Fi passwords now stay on each device.');
   } else if (kind === 'room-budget') {
     commit((s) => {
       if (el.value === '') delete s.settings.roomBudgets[el.dataset.room];
@@ -861,11 +927,8 @@ document.addEventListener('change', async (e) => {
     if (!file) return;
     try {
       const next = importJSON(await file.text());
-      if (!(await confirmAction('Replace everything with this backup?', `${next.tasks.length} tasks and ${next.items.length} items will replace what is here now.`, 'Import'))) return;
-      state = next;
-      saveState(state);
-      applyTheme();
-      renderView();
+      if (!(await confirmAction('Replace everything with this backup?', `${next.tasks.length} tasks and ${next.items.length} items will replace what is here now${SYNC_ON ? ' and on your other devices' : ''}.`, 'Import'))) return;
+      replaceState(M.stampUpdated(next));
       toast('Backup imported.');
     } catch (err) {
       toast(`Import failed: ${err.message}`);
@@ -1022,5 +1085,15 @@ document.addEventListener('dragend', () => {
 
 window.addEventListener('hashchange', () => { renderView(); window.scrollTo(0, 0); });
 window.addEventListener('load', () => { if (route() === 'home') drawQr(); });
+const sync = startSync({
+  config: FIREBASE_CONFIG,
+  collection: COLLECTION,
+  docId: DOC_ID,
+  hooks: {
+    getState: () => state,
+    applyRemote: (next) => replaceState(next, { push: false }),
+    setBadge: setSyncBadge,
+  },
+});
 applyTheme();
 renderView();

@@ -81,6 +81,18 @@ svg { display: block; }
 .tabs a:hover { background: var(--surface-2); color: var(--ink); }
 .tabs a.active { background: var(--ink); color: var(--bg); }
 
+.sync-badge {
+  display: inline-flex; align-items: center; gap: 7px; flex: none; padding: 5px 11px; border-radius: 999px;
+  border: 1px solid var(--line); font-size: 12.5px; font-weight: 500; color: var(--muted); white-space: nowrap;
+}
+.sync-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.sync-badge[data-mode="on"] { color: var(--ok); background: var(--ok-soft); border-color: transparent; }
+.sync-badge[data-mode="on"] .dot { background: var(--ok); }
+.sync-badge[data-mode="wait"] { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+.sync-badge[data-mode="wait"] .dot { background: var(--warn); }
+.sync-badge[data-mode="error"] { color: var(--danger); background: var(--danger-soft); border-color: transparent; }
+.sync-badge[data-mode="error"] .dot { background: var(--danger); }
+
 main { max-width: 1180px; margin: 0 auto; padding: 24px 24px 64px; outline: none; }
 
 /* ---------- Building blocks ---------- */
@@ -323,7 +335,8 @@ td select { width: auto; min-height: 30px; padding: 3px 8px; font-size: 13px; }
   .budget-strip > :first-child { grid-column: 1 / -1; }
 }
 @media (max-width: 720px) {
-  .topbar { padding: 10px 16px; backdrop-filter: none; background: var(--surface); }
+  .topbar { padding: 10px 16px; backdrop-filter: none; background: var(--surface); gap: 12px; }
+  .sync-badge { margin-left: auto; }
   .tabs {
     position: fixed; bottom: 0; left: 0; right: 0; justify-content: space-around; margin: 0; z-index: 30;
     background: var(--surface); border-top: 1px solid var(--line); padding: 6px 4px calc(6px + env(safe-area-inset-bottom));

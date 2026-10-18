@@ -1,0 +1,22 @@
+rules_version = '2';
+
+// New House Command Center has no login, by design. Any rule that lets the app in also
+// lets in anyone making the same request, so access is as narrow as the rules allow:
+//
+//   * Only the one document the app uses. Anything else added to this project later is
+//     not reachable through these rules.
+//   * No `list`, so the collection can't be browsed to find the id.
+//   * No `delete`, so the document can't be wiped, only updated.
+//
+// The document id is 96 random bits, but it is also in the public repo (js/sync-config.js),
+// so treat the synced data as readable by anyone who looks. Wi-Fi passwords stay off the
+// cloud unless you opt in from Settings.
+//
+// Unlike test mode, these rules do not expire.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /houses/nh-2658c0461f9e466d1e0b637b {
+      allow get, create, update: if true;
+    }
+  }
+}
