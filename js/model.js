@@ -164,18 +164,19 @@ export function mergeRemote(local, remote) {
 //   'apply'  remote is newer, adopt `state`
 //   'push'   this device is newer (or the cloud is empty), upload it
 //   'none'   same timestamp, nothing to do
-// `remote` is null when the cloud document does not exist yet. A device with real edits that
-// founds the cloud copy is stamped as current (`state`), so devices still holding pre-sync
-// data adopt it instead of tying with it. Untouched seed data (0) never claims to be current.
+// `remote` is null when the cloud document does not exist yet. Data saved before sync existed
+// (PRE_SYNC) is stamped as current (`state`) when it uploads, so a second device still holding
+// pre-sync data adopts it instead of tying with it. Seed data (0) never claims to be current.
+export const PRE_SYNC = 1;
 export function reconcile(local, remote, now = Date.now()) {
-  if (!remote) {
-    const lAt = Number(local && local.updatedAt) || 0;
-    return lAt > 0 ? { action: 'push', state: stampUpdated({ ...local }, now) } : { action: 'push' };
-  }
-  const rAt = Number(remote.updatedAt) || 0;
   const lAt = Number(local && local.updatedAt) || 0;
+  const claim = () => (lAt === PRE_SYNC || (!remote && lAt > 0)
+    ? { action: 'push', state: stampUpdated({ ...local }, now) }
+    : { action: 'push' });
+  if (!remote) return claim();
+  const rAt = Number(remote.updatedAt) || 0;
   if (rAt > lAt) return { action: 'apply', state: mergeRemote(local, remote) };
-  if (lAt > rAt) return { action: 'push' };
+  if (lAt > rAt) return claim();
   return { action: 'none' };
 }
 

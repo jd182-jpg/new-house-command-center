@@ -285,3 +285,12 @@ test('turning on password sync from a device without passwords does not erase th
   const { state } = reconcile(phone, laptop);
   assert.equal(state.homeInfo.wifiPassword, 'phonepw');
 });
+
+test('pre-sync data uploading over seed data claims to be current', () => {
+  // A device that only opened the site (seed, 0) created the cloud doc first.
+  const r = reconcile(withHome(1), withHome(0), 9000);
+  assert.equal(r.action, 'push');
+  assert.equal(r.state.updatedAt, 9000);
+  assert.equal(reconcile(withHome(1), r.state).action, 'apply', 'the next pre-sync device adopts it');
+  assert.equal(reconcile(withHome(500), withHome(0)).state, undefined, 'normal edits push as-is');
+});

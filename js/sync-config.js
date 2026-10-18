@@ -1,11 +1,17 @@
-// Cross-device sync settings. While FIREBASE_CONFIG is null the app works exactly as
-// before and keeps everything in this browser. Paste your Firebase web app config below
-// (README > Turn on sync) and every device that opens the site shares one copy.
+// Cross-device sync settings. Set FIREBASE_CONFIG to null to go back to keeping
+// everything in this one browser. With it filled in, every device shares one copy.
 //
 // These values are not secrets: Firebase web config is meant to ship in public pages.
 // Access is controlled by firestore.rules, which only allows the one document below.
 
-export const FIREBASE_CONFIG = null;
+export const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyAeQRJt3hCkVVU8QrjyqSVwbDP_LyjhwZU',
+  authDomain: 'home-f9ba8.firebaseapp.com',
+  projectId: 'home-f9ba8',
+  storageBucket: 'home-f9ba8.firebasestorage.app',
+  messagingSenderId: '293620260157',
+  appId: '1:293620260157:web:0876c5106d1ab8faadb954',
+};
 
 // The one Firestore document that holds your data: 96 random bits, so it can't be guessed.
 // The app has no login, so anyone who knows this id can read and write the document.

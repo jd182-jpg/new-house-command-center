@@ -1,6 +1,6 @@
 // Saves and loads state from this browser's localStorage. Syncing to other devices is js/sync.js.
 import seed from './seed-data.js';
-import { buildStateFromSeed, normalizeState, stampUpdated } from './model.js';
+import { buildStateFromSeed, normalizeState, stampUpdated, PRE_SYNC } from './model.js';
 
 const KEY = 'nhcc.state.v1';
 
@@ -10,7 +10,7 @@ export function loadState() {
     if (raw) {
       const parsed = JSON.parse(raw);
       // Saved before sync existed: it holds real edits, so it should beat untouched seed data (0).
-      if (!parsed.updatedAt) parsed.updatedAt = 1;
+      if (!parsed.updatedAt) parsed.updatedAt = PRE_SYNC;
       return normalizeState(parsed);
     }
   } catch (err) {
