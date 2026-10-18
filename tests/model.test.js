@@ -31,7 +31,7 @@ test('seed rooms all exist for every seeded item', () => {
 });
 
 test('no em dashes in seed text', () => {
-  assert.ok(!JSON.stringify(seed).includes('—'));
+  assert.ok(!JSON.stringify(seed).includes('\u2014'));
 });
 
 test('createItem fills defaults and coerces numbers', () => {
