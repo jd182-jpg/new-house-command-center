@@ -1,0 +1,194 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import seed from '../js/seed-data.js';
+import {
+  createItem, createTask, buildStateFromSeed, normalizeState, budgetSummary, roomSummaries,
+  itemTotal, effectiveUnitPrice, taskProgress, shoppingProgress, overallProgress, doNext,
+  daysUntil, isOverdue, reorder, fitCheck, stairWarning, wifiQrPayload, TASK_CATEGORIES,
+} from '../js/model.js';
+
+const NOW = new Date(2026, 9, 17); // Oct 17 2026, local time
+
+test('seed builds a valid state with every task category covered', () => {
+  const state = buildStateFromSeed(seed);
+  assert.ok(state.tasks.length > 20);
+  assert.ok(state.items.length > 50);
+  for (const c of TASK_CATEGORIES) assert.ok(state.tasks.some((t) => t.category === c), c);
+  assert.equal(state.settings.closingDate, '');
+  assert.equal(state.settings.moveInDate, '');
+  const ids = new Set([...state.tasks, ...state.items].map((x) => x.id));
+  assert.equal(ids.size, state.tasks.length + state.items.length, 'ids are unique');
+});
+
+test('seed includes every item from your list', () => {
+  const names = seed.items.filter((i) => i.source === 'mine').map((i) => i.name);
+  assert.equal(names.length, 20);
+});
+
+test('seed rooms all exist for every seeded item', () => {
+  const roomNames = seed.rooms.map((r) => r.name);
+  for (const it of seed.items) assert.ok(roomNames.includes(it.room), `${it.name} -> ${it.room}`);
+});
+
+test('no em dashes in seed text', () => {
+  assert.ok(!JSON.stringify(seed).includes('—'));
+});
+
+test('createItem fills defaults and coerces numbers', () => {
+  const it = createItem({ name: '  Sofa ', qty: '2', unitPrice: '$1,250.50', dims: { w: '96' } });
+  assert.equal(it.name, 'Sofa');
+  assert.equal(it.qty, 2);
+  assert.equal(it.unitPrice, 1250.5);
+  assert.equal(it.dims.w, 96);
+  assert.equal(it.dims.d, null);
+  assert.equal(it.status, 'Idea');
+  assert.equal(it.stairOk, 'Need to check');
+});
+
+test('createTask rejects unknown enums', () => {
+  const t = createTask({ title: 'x', status: 'Nope', priority: 'Urgent', category: 'Pets' });
+  assert.equal(t.status, 'To do');
+  assert.equal(t.priority, 'Medium');
+  assert.equal(t.category, 'Utilities');
+});
+
+test('effective price falls back to the chosen link', () => {
+  const it = createItem({
+    name: 'Lamp', qty: 2,
+    links: [{ id: 'a', url: 'https://a', price: 80 }, { id: 'b', url: 'https://b', price: 120 }],
+    chosenLinkId: 'b',
+  });
+  assert.equal(effectiveUnitPrice(it), 120);
+  assert.equal(itemTotal(it), 240);
+  it.unitPrice = 99.99;
+  assert.equal(itemTotal(it), 199.98);
+});
+
+test('budget summary counts only purchased items as spent', () => {
+  const items = [
+    createItem({ name: 'a', unitPrice: 100, qty: 2, status: 'Ordered' }),
+    createItem({ name: 'b', unitPrice: 50, status: 'Placed' }),
+    createItem({ name: 'c', unitPrice: 300, status: 'Researching' }),
+    createItem({ name: 'd', status: 'Idea' }),
+  ];
+  const s = budgetSummary(items, 400);
+  assert.equal(s.spent, 250);
+  assert.equal(s.planned, 550);
+  assert.equal(s.remaining, 150);
+  assert.equal(s.remainingAfterPlanned, -150);
+  assert.equal(s.overBudget, false);
+  assert.equal(s.plannedOverBudget, true);
+  assert.equal(s.unpriced, 1);
+  assert.equal(s.pctSpent, 63);
+  assert.equal(s.statusCounts.Ordered, 1);
+  assert.equal(s.statusCounts.Idea, 1);
+});
+
+test('budget summary flags over budget and handles no budget', () => {
+  const items = [createItem({ name: 'a', unitPrice: 500, status: 'Delivered' })];
+  assert.equal(budgetSummary(items, 400).overBudget, true);
+  const none = budgetSummary(items, null);
+  assert.equal(none.remaining, null);
+  assert.equal(none.overBudget, false);
+});
+
+test('floating point money stays clean', () => {
+  const items = [0.1, 0.2].map((p) => createItem({ name: 'x', unitPrice: p, status: 'Ordered' }));
+  assert.equal(budgetSummary(items, 1).spent, 0.3);
+});
+
+test('room summaries use per-room budgets and include stray rooms', () => {
+  const items = [
+    createItem({ name: 'a', room: 'Living', unitPrice: 1000, status: 'Ordered' }),
+    createItem({ name: 'b', room: 'Attic', unitPrice: 10, status: 'Ordered' }),
+  ];
+  const rows = roomSummaries(items, ['Living', 'Kitchen'], { Living: '800' });
+  const living = rows.find((r) => r.room === 'Living');
+  assert.equal(living.overBudget, true);
+  assert.equal(living.remaining, -200);
+  assert.ok(rows.find((r) => r.room === 'Attic'));
+  assert.equal(rows.find((r) => r.room === 'Kitchen').count, 0);
+});
+
+test('progress math', () => {
+  const tasks = [
+    createTask({ title: 'a', status: 'Done', category: 'Mail' }),
+    createTask({ title: 'b', category: 'Mail' }),
+    createTask({ title: 'c', category: 'Utilities' }),
+  ];
+  const items = [createItem({ name: 'x', status: 'Shipped' }), createItem({ name: 'y' })];
+  assert.deepEqual(taskProgress(tasks, 'Mail'), { done: 1, total: 2, pct: 50 });
+  assert.deepEqual(shoppingProgress(items), { done: 1, total: 2, pct: 50 });
+  assert.deepEqual(overallProgress(tasks, items), { done: 2, total: 5, pct: 40 });
+  assert.deepEqual(taskProgress([], 'Mail'), { done: 0, total: 0, pct: 0 });
+});
+
+test('daysUntil and overdue', () => {
+  assert.equal(daysUntil('2026-10-20', NOW), 3);
+  assert.equal(daysUntil('2026-10-16', NOW), -1);
+  assert.equal(daysUntil('', NOW), null);
+  assert.equal(isOverdue(createTask({ title: 'a', due: '2026-10-01' }), NOW), true);
+  assert.equal(isOverdue(createTask({ title: 'a', due: '2026-10-01', status: 'Done' }), NOW), false);
+});
+
+test('doNext puts overdue first, then priority, then due date', () => {
+  const tasks = [
+    createTask({ id: 'low-overdue', title: 'a', priority: 'Low', due: '2026-10-01' }),
+    createTask({ id: 'high-late', title: 'b', priority: 'High', due: '2026-12-01' }),
+    createTask({ id: 'high-soon', title: 'c', priority: 'High', due: '2026-10-20' }),
+    createTask({ id: 'high-nodate', title: 'd', priority: 'High' }),
+    createTask({ id: 'done', title: 'e', priority: 'High', status: 'Done', due: '2026-01-01' }),
+    createTask({ id: 'med', title: 'f', priority: 'Medium' }),
+  ];
+  const ids = doNext(tasks, 5, NOW).map((t) => t.id);
+  assert.deepEqual(ids, ['low-overdue', 'high-soon', 'high-late', 'high-nodate', 'med']);
+});
+
+test('reorder moves an item before a target and keeps orders dense', () => {
+  const list = ['a', 'b', 'c', 'd'].map((id, i) => ({ id, order: i }));
+  const out = reorder(list, 'd', 'b');
+  const sorted = [...out].sort((x, y) => x.order - y.order).map((x) => x.id);
+  assert.deepEqual(sorted, ['a', 'd', 'b', 'c']);
+  const toEnd = reorder(list, 'a', null);
+  assert.deepEqual([...toEnd].sort((x, y) => x.order - y.order).map((x) => x.id), ['b', 'c', 'd', 'a']);
+});
+
+test('fit check: 96 in sofa in the 25x23 living room is roomy', () => {
+  const living = { name: 'Living', level: 2, w: 25, l: 23 };
+  const f = fitCheck(createItem({ name: 'Sofa', dims: { w: 96, d: 38 } }), living);
+  assert.equal(f.level, 'roomy');
+  assert.equal(f.pctLong, 32);
+  assert.match(f.message, /Room to spare/);
+});
+
+test('fit check: wide table in the dining room gets a watch note', () => {
+  const dining = { name: 'Dining', level: 2, w: 10, l: 14 };
+  assert.equal(fitCheck(createItem({ name: 't', dims: { w: 130 } }), dining).level, 'watch');
+  assert.equal(fitCheck(createItem({ name: 't', dims: { w: 200 } }), dining).level, 'tight');
+  assert.equal(fitCheck(createItem({ name: 't' }), dining), null);
+  assert.equal(fitCheck(createItem({ name: 't', dims: { w: 50 } }), { name: 'Terrace' }), null);
+});
+
+test('stair warning only for long pieces above floor 1', () => {
+  const up = { name: 'Primary BR', level: 3, w: 29, l: 19 };
+  const down = { name: 'Bedroom', level: 1, w: 15, l: 17 };
+  assert.match(stairWarning(createItem({ name: 'bed', dims: { w: 86 } }), up), /floor 3/);
+  assert.equal(stairWarning(createItem({ name: 'bed', dims: { w: 86 }, stairOk: 'Yes' }), up), null);
+  assert.equal(stairWarning(createItem({ name: 'bed', dims: { w: 86 } }), down), null);
+  assert.match(stairWarning(createItem({ name: 'x', stairOk: 'No' }), up), /knock-down/);
+});
+
+test('wifi QR payload escapes special characters', () => {
+  assert.equal(wifiQrPayload('Casa', 'pa;ss:word'), 'WIFI:T:WPA;S:Casa;P:pa\\;ss\\:word;;');
+  assert.equal(wifiQrPayload('Open Net', ''), 'WIFI:T:nopass;S:Open Net;P:;;');
+  assert.equal(wifiQrPayload('', 'x'), '');
+});
+
+test('normalizeState rejects junk and survives partial imports', () => {
+  assert.throws(() => normalizeState(null));
+  assert.throws(() => normalizeState({ tasks: [] }));
+  const s = normalizeState({ tasks: [{ title: 'x' }], items: [{ name: 'y' }] });
+  assert.equal(s.settings.theme, 'auto');
+  assert.equal(s.tasks[0].status, 'To do');
+  assert.equal(s.items[0].qty, 1);
+});

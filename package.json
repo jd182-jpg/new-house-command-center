@@ -1,0 +1,11 @@
+{
+  "name": "new-house-command-center",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Personal move-in tracker for 2608 Montrose Blvd: tasks, shopping, budget, and home info.",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "test": "node --test tests/*.test.js"
+  }
+}
