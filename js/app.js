@@ -3,6 +3,7 @@
 import * as M from './model.js';
 import { loadState, saveState, resetToSeed, exportJSON, importJSON } from './store.js';
 import { startSync } from './sync.js';
+import seed from './seed-data.js';
 import { FIREBASE_CONFIG, COLLECTION, DOC_ID } from './sync-config.js';
 
 const SYNC_ON = !!(FIREBASE_CONFIG && FIREBASE_CONFIG.projectId);
@@ -1092,8 +1093,20 @@ const sync = startSync({
   hooks: {
     getState: () => state,
     applyRemote: (next) => replaceState(next, { push: false }),
-    setBadge: setSyncBadge,
+    // Seed updates wait until this device has caught up with the cloud, so they land on the
+    // newest data. The timeout lets the snapshot that confirmed the sync finish reconciling first.
+    setBadge: (label, mode) => {
+      setSyncBadge(label, mode);
+      if (mode === 'on' || mode === 'off') setTimeout(ensureUpdates, 0);
+    },
   },
 });
+
+function ensureUpdates() {
+  const { state: next, changed } = M.applySeedUpdates(state, seed.updates);
+  if (!changed) return;
+  replaceState(M.stampUpdated(next));
+  toast('New info added from your house docs.');
+}
 applyTheme();
 renderView();

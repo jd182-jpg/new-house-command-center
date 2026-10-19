@@ -4,7 +4,7 @@ import seed from '../js/seed-data.js';
 import {
   createItem, createTask, buildStateFromSeed, normalizeState, budgetSummary, roomSummaries,
   itemTotal, effectiveUnitPrice, taskProgress, shoppingProgress, overallProgress, doNext,
-  daysUntil, isOverdue, reorder, fitCheck, stairWarning, wifiQrPayload, TASK_CATEGORIES,
+  daysUntil, isOverdue, reorder, fitCheck, stairWarning, wifiQrPayload, TASK_CATEGORIES, applySeedUpdates,
   reconcile, stampUpdated, toSyncPayload, SECRET_HOME_KEYS,
 } from '../js/model.js';
 
@@ -15,8 +15,8 @@ test('seed builds a valid state with every task category covered', () => {
   assert.ok(state.tasks.length > 20);
   assert.ok(state.items.length > 50);
   for (const c of TASK_CATEGORIES) assert.ok(state.tasks.some((t) => t.category === c), c);
-  assert.equal(state.settings.closingDate, '');
-  assert.equal(state.settings.moveInDate, '');
+  assert.equal(state.settings.closingDate, '2026-11-13');
+  assert.equal(state.settings.moveInDate, '2026-11-20');
   const ids = new Set([...state.tasks, ...state.items].map((x) => x.id));
   assert.equal(ids.size, state.tasks.length + state.items.length, 'ids are unique');
 });
@@ -293,4 +293,33 @@ test('pre-sync data uploading over seed data claims to be current', () => {
   assert.equal(r.state.updatedAt, 9000);
   assert.equal(reconcile(withHome(1), r.state).action, 'apply', 'the next pre-sync device adopts it');
   assert.equal(reconcile(withHome(500), withHome(0)).state, undefined, 'normal edits push as-is');
+});
+
+test('seed updates: fresh seed already has them applied, once', () => {
+  const state = buildStateFromSeed(seed);
+  assert.deepEqual(state.appliedUpdates, seed.updates.map((u) => u.id));
+  assert.equal(state.settings.closingDate, '2026-11-13');
+  assert.equal(state.tasks.filter((t) => t.id === 'closing-wire').length, 1);
+  assert.equal(state.items.find((i) => i.name === 'Washer and dryer').status, 'Placed');
+  assert.equal(applySeedUpdates(state, seed.updates).changed, false);
+});
+
+test('seed updates fill gaps in existing data without clobbering your edits', () => {
+  // Data from before the update: no appliedUpdates, a custom move-in date, a deleted task.
+  const old = buildStateFromSeed({ ...seed, updates: [] });
+  old.settings.moveInDate = '2026-12-01';
+  old.tasks = old.tasks.filter((t) => t.title !== 'Final meter readings at closing');
+  const usps = old.tasks.find((t) => t.title === 'USPS change of address from Wisconsin');
+  usps.due = '2026-11-01';
+  old.updatedAt = 5;
+  const { state, changed } = applySeedUpdates(old, seed.updates);
+  assert.equal(changed, true);
+  assert.equal(state.settings.closingDate, '2026-11-13');
+  assert.equal(state.settings.moveInDate, '2026-12-01', 'your date wins');
+  assert.equal(state.tasks.find((t) => t.title === 'USPS change of address from Wisconsin').due, '2026-11-01');
+  assert.ok(!state.tasks.some((t) => t.title === 'Final meter readings at closing'), 'deleted stays deleted');
+  assert.equal(state.tasks.filter((t) => t.category === 'Closing').length, 13);
+  assert.equal(state.updatedAt, 5, 'stamping is the caller\'s job');
+  assert.equal(applySeedUpdates(state, seed.updates).changed, false);
+  assert.equal(old.appliedUpdates.length, 0, 'input is not mutated');
 });

@@ -1,7 +1,7 @@
 // Pure data logic for the New House Command Center.
 // No DOM, no storage: everything here is unit tested in tests/model.test.js.
 
-export const TASK_CATEGORIES = ['Utilities', 'Internet and Wi-Fi', 'Address Changes', 'Mail'];
+export const TASK_CATEGORIES = ['Closing', 'Utilities', 'Internet and Wi-Fi', 'Address Changes', 'Mail'];
 export const TASK_STATUSES = ['To do', 'In progress', 'Waiting', 'Done'];
 export const TASK_PRIORITIES = ['High', 'Medium', 'Low'];
 
@@ -30,7 +30,7 @@ export function createTask(fields = {}) {
   return {
     id: fields.id || makeId('task'),
     title: (fields.title || '').trim() || 'Untitled task',
-    category: TASK_CATEGORIES.includes(fields.category) ? fields.category : TASK_CATEGORIES[0],
+    category: TASK_CATEGORIES.includes(fields.category) ? fields.category : 'Utilities',
     status: TASK_STATUSES.includes(fields.status) ? fields.status : 'To do',
     priority: TASK_PRIORITIES.includes(fields.priority) ? fields.priority : 'Medium',
     due: fields.due || '',
@@ -88,7 +88,7 @@ export function createItem(fields = {}) {
 
 // Builds a fresh app state from the seed module.
 export function buildStateFromSeed(seed) {
-  return normalizeState({
+  const base = normalizeState({
     version: SCHEMA_VERSION,
     settings: { ...seed.settings },
     tasks: seed.tasks.map((t, i) => ({ ...t, order: i })),
@@ -96,6 +96,8 @@ export function buildStateFromSeed(seed) {
     homeInfo: JSON.parse(JSON.stringify(seed.homeInfo)),
     rooms: seed.rooms.map((r) => ({ ...r })),
   });
+  // Later facts (seed.updates) are layered on top, exactly as they reach existing data.
+  return applySeedUpdates(base, seed.updates || []).state;
 }
 
 // Accepts anything that looks like saved state (including imports) and makes it safe to use.
@@ -119,9 +121,70 @@ export function normalizeState(raw) {
     items: raw.items.map(createItem),
     homeInfo: raw.homeInfo && typeof raw.homeInfo === 'object' ? raw.homeInfo : {},
     rooms: Array.isArray(raw.rooms) ? raw.rooms : [],
+    appliedUpdates: Array.isArray(raw.appliedUpdates) ? raw.appliedUpdates.filter((x) => typeof x === 'string') : [],
     // Milliseconds of the last edit. 0 means untouched seed data, so any real copy beats it.
     updatedAt: Number.isFinite(raw.updatedAt) && raw.updatedAt > 0 ? raw.updatedAt : 0,
   };
+}
+
+// ---------- Seed updates ----------
+
+// Seed updates deliver new facts to data you are already using, once per update id.
+// They only fill gaps: new tasks are added by id, settings are set only when blank, and
+// edits to existing tasks and items match by title or name and leave deleted ones alone.
+// update: { id, settings, addTasks, editTasks: [{ title, set }], editItems: [{ name, set }],
+//           addContacts, appendNotes }
+export function pendingUpdates(state, updates = []) {
+  const done = new Set(state.appliedUpdates || []);
+  return updates.filter((u) => !done.has(u.id));
+}
+
+export function applySeedUpdates(state, updates = []) {
+  const pending = pendingUpdates(state, updates);
+  if (!pending.length) return { state, changed: false };
+  const next = JSON.parse(JSON.stringify(state));
+  next.appliedUpdates = [...(next.appliedUpdates || [])];
+  for (const u of pending) {
+    for (const [k, v] of Object.entries(u.settings || {})) {
+      if (next.settings[k] === '' || next.settings[k] == null) next.settings[k] = v;
+    }
+    let order = Math.max(-1, ...next.tasks.map((t) => t.order));
+    for (const t of u.addTasks || []) {
+      if (!next.tasks.some((x) => x.id === t.id)) next.tasks.push(createTask({ ...t, order: (order += 1) }));
+    }
+    for (const { title, set } of u.editTasks || []) {
+      const t = next.tasks.find((x) => x.title === title);
+      if (t) Object.assign(t, setOrFill(t, set));
+    }
+    for (const { name, set } of u.editItems || []) {
+      const it = next.items.find((x) => x.name === name);
+      if (it) Object.assign(it, setOrFill(it, set));
+    }
+    if (u.addContacts) {
+      next.homeInfo.contacts = next.homeInfo.contacts || [];
+      for (const c of u.addContacts) {
+        if (!next.homeInfo.contacts.some((x) => x.role === c.role)) next.homeInfo.contacts.push({ ...c });
+      }
+    }
+    if (u.appendNotes) {
+      const cur = next.homeInfo.notes || '';
+      if (!cur.includes(u.appendNotes)) next.homeInfo.notes = cur ? `${cur}\n\n${u.appendNotes}` : u.appendNotes;
+    }
+    next.appliedUpdates.push(u.id);
+  }
+  return { state: normalizeState(next), changed: true };
+}
+
+// `set` keys ending in "?" only fill a blank field (so your own due dates win); others overwrite.
+function setOrFill(target, set) {
+  const out = {};
+  for (const [key, v] of Object.entries(set)) {
+    if (key.endsWith('?')) {
+      const k = key.slice(0, -1);
+      if (target[k] === '' || target[k] == null) out[k] = v;
+    } else out[key] = v;
+  }
+  return out;
 }
 
 // ---------- Sync ----------

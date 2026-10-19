@@ -319,4 +319,68 @@ export const homeInfo = {
   ],
 };
 
-export default { rooms, settings, tasks, items, homeInfo };
+// ---------- Updates ----------
+// New facts for data you are already using. Each update runs once per device's data (it is
+// remembered by id), only fills blanks in settings, adds tasks by id, and edits seeded tasks
+// and items by exact title or name. To add more later, append a new object with a new id.
+const C = (id, priority, due, title, hint, extra = {}) => ({ id, category: 'Closing', priority, due, title, hint, ...extra });
+
+export const updates = [
+  {
+    id: '2026-10-18-contract-dates',
+    settings: { closingDate: '2026-11-13', moveInDate: '2026-11-20' },
+    addTasks: [
+      C('closing-hoa-docs', 'High', '2026-10-20', 'Confirm when the HOA documents were delivered',
+        'The seller owed you the HOA documents within 7 days of the 10/8 effective date, so by 10/15. Your folder has a resale certificate signed 10/14. Ask Leah for the date you officially received the full packet: you can still terminate within 3 days of receiving them, even though you waived the option period.',
+        { contact: 'Leah Leggett', phone: '832-259-6808' }),
+      C('closing-title-commitment', 'High', '2026-10-28', 'Get the title commitment from Alamo Title',
+        'The seller delivers it within 20 days after Alamo Title receives the contract, so about 10/28. Your 5 day objection clock starts once you have both the commitment and the survey.',
+        { contact: 'Alamo Title' }),
+      C('closing-survey', 'Medium', '2026-10-29', 'Decide whether to order a new survey',
+        'The window to order a new survey at your expense closes 10/29. If you skip it, plan on the survey amendment cost at closing.'),
+      C('closing-objections', 'High', '2026-11-03', 'Review title and survey, send any objections',
+        'You have 5 days after receiving both the commitment and the survey to object. Update this due date once both arrive. Closing can slip to 7 days after objections are cured or waived.'),
+      C('closing-insurance-leaseback', 'High', '2026-11-06', 'Tell Tye about the seller leaseback',
+        'Both the contract and the lease say the seller staying in possession can change coverage. Make sure the policy you bind for 11/13 fits a seller-occupied week (11/13 to 11/20).',
+        { contact: 'Tye Justice (State Farm)' }),
+      C('closing-settlement', 'High', '2026-11-10', 'Check the settlement statement: price $614,584',
+        'The repair amendment you both signed on 10/17 sets the price at $614,584. The earlier $590,000 amendment was only signed by you, so it should not apply, and the original contract said $630,000. Your $6,300 earnest money and $750 option fee are credited, leaving about $607,534 plus closing costs (half the escrow fee, the survey amendment, up to $350 in HOA transfer fees).'),
+      C('closing-repair-docs', 'Medium', '2026-11-10', 'Collect repair invoices and warranties from the seller',
+        'Due 3 days before closing (11/10 for an 11/13 closing). Save copies with your house documents.'),
+      C('closing-wire', 'High', '2026-11-12', 'Verify wiring instructions by phone, then wire funds',
+        'Call Alamo Title at a number you looked up yourself, never one from an email, and confirm the instructions before sending. Wire fraud targets closings. Roughly $607,534 plus closing costs; use the final figure from the settlement statement.',
+        { contact: 'Alamo Title' }),
+      C('closing-walkthrough', 'High', '2026-11-12', 'Final walkthrough',
+        'Check the repairs from the amendment, and that the refrigerator, washer, and dryer are there and working (they convey). Photograph anything off.'),
+      C('closing-day', 'High', '2026-11-13', 'Closing day at Alamo Title',
+        'Bring ID. Confirm the leaseback rent is collected at funding: $200 per day for the whole term (7 days is $1,400), plus the $1,000 deposit.'),
+      C('closing-leaseback-end', 'High', '2026-11-20', 'Leaseback ends: get possession',
+        'The end date is fixed at 11/20 even if closing slips. Confirm the seller is out, the home was professionally cleaned, and you have every key, gate remote, pool key, and the mailbox key. Holdover is $500 per day past 11/20.'),
+      C('closing-deposit-refund', 'Medium', '2026-12-20', 'Refund the seller\'s $1,000 lease deposit',
+        'Due within 30 days after he moves out (12/20 if he leaves 11/20). Deduct only for damage or unpaid holdover, in writing.'),
+      C('closing-stucco', 'Medium', '2027-03-13', 'Stucco repairs and escrow claim deadline',
+        'Repairs and the escrow claim are due 120 days after closing, about 3/13/2027 for an 11/13 closing. Line up the stucco contractor early in the new year.'),
+    ],
+    editTasks: [
+      { title: 'Line up start dates with move-in, nothing left in seller\'s name', set: {
+        'due?': '2026-11-06',
+        hint: 'The seller pays every utility during the leaseback (11/13 to 11/20), so start your service on 11/20. Schedule it about two weeks ahead, and ask each provider to close the seller\'s account that day so you are not billed for his usage.' } },
+      { title: 'Final meter readings at closing', set: {
+        hint: 'Since the seller pays utilities through the leaseback, take photos of the electric and gas meter readings on 11/20 when you get possession. From your docs: the meter bank is not clearly labeled, so ask the HOA which meter is yours.' } },
+      { title: 'Order service and book install for move-in week', set: {
+        hint: 'Book the install for the week of 11/20, after the leaseback ends. Ask where the line enters the house so the router can live on floor 2.' } },
+      { title: 'Get the mailbox key and location at closing', set: {
+        hint: 'The seller stays until 11/20, so get the mailbox key when the leaseback ends. Ask which cluster box is yours. If there is no key, the post office can rekey it with proof of ownership.' } },
+      { title: 'USPS change of address from Wisconsin', set: { 'due?': '2026-11-13' } },
+    ],
+    editItems: [
+      { name: 'Washer and dryer', set: { status: 'Placed', notes: 'Conveys with the house per the contract, along with the refrigerator. Nothing to buy. Check they work at the walkthrough.' } },
+    ],
+    addContacts: [
+      { role: 'Title company', name: 'Alamo Title', phone: '', email: '' },
+    ],
+    appendNotes: 'Contract: price $614,584 (repair amendment signed 10/17). Closing on or before 11/13/2026 at Alamo Title. Seller leaseback 11/13 to 11/20 at $200 per day, $1,000 deposit, $500 per day holdover. Refrigerator, washer, and dryer convey.',
+  },
+];
+
+export default { rooms, settings, tasks, items, homeInfo, updates };

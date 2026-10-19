@@ -34,7 +34,9 @@ The tests use Node's built-in test runner (Node 18 or newer), so there is nothin
 | `tests/model.test.js` | Unit tests, including the sync reconcile rules. |
 | `tests/sync.test.js` | Two fake devices syncing through a fake Firestore. |
 
-Seed changes show up after **Settings > Reset to seed data**, or in a browser that has never opened the app.
+Edits to the base seed lists only show up after **Settings > Reset to seed data**, or in a browser that has never opened the app.
+
+To add new facts to data you are already using, append an entry to `updates` at the bottom of `js/seed-data.js`. Each update runs once (remembered by its id) after the device has synced. It fills blank settings, adds tasks by id, and edits seeded tasks and items by exact title. It never touches your own dates or anything you deleted.
 
 ## Data model
 
