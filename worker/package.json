@@ -1,0 +1,16 @@
+{
+  "name": "house-text",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker that turns a text message into New House Command Center updates.",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.132.1"
+  },
+  "devDependencies": {
+    "wrangler": "4.149.0"
+  }
+}

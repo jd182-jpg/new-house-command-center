@@ -449,3 +449,183 @@ export function formatMoney(n, { cents = false } = {}) {
     maximumFractionDigits: cents ? 2 : 0,
   });
 }
+
+// ---------- Text updates ----------
+
+// Plain-English updates ("ordered the Frame TV from Best Buy, $1,999") arrive through the
+// Worker in worker/, which asks Claude to turn the message into these operations. The rules
+// for applying them live here so the app and the Worker agree, and so they are unit tested.
+//
+// op kinds:
+//   updateTask { taskId, status?, due?, confirmation?, notes? }   notes are appended
+//   addTask    { title, category?, priority?, due?, notes? }
+//   updateItem { itemId, status?, unitPrice?, qty?, store?, url?, orderNumber?, expectedDelivery?, notes? }
+//   addItem    { name, room?, category?, priority?, status?, unitPrice?, qty?, store?, url?, notes? }
+//   setDates   { closingDate?, moveInDate? }
+//
+// Nothing in here ever reads or writes homeInfo, so Wi-Fi passwords can't be touched.
+
+export const TEXT_OP_KINDS = ['updateTask', 'addTask', 'updateItem', 'addItem', 'setDates'];
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// "2026-11-22" -> "Nov 22"
+export function shortDate(iso) {
+  if (!ISO_DATE.test(iso || '')) return iso || '';
+  const [, m, d] = iso.split('-').map(Number);
+  return `${MONTHS[m - 1]} ${d}`;
+}
+
+const pickEnum = (list, v) => list.find((x) => x.toLowerCase() === String(v).trim().toLowerCase());
+const has = (o, k) => o[k] != null && o[k] !== '';
+const sameName = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+function validUrl(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' || u.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+function hostLabel(url) {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; }
+}
+
+// The compact view of the list that the parser sees. Ids let it point at an exact row.
+export function describeForParser(state) {
+  const lines = [
+    `Closing date: ${state.settings.closingDate || 'not set'}. Move-in date: ${state.settings.moveInDate || 'not set'}.`,
+    `Rooms: ${state.rooms.map((r) => r.name).join(', ')}`,
+    '',
+    'TASKS (id | status | category | due | title)',
+    ...state.tasks.map((t) => `${t.id} | ${t.status} | ${t.category} | ${t.due || '-'} | ${t.title}`),
+    '',
+    'ITEMS (id | status | room | price | store | name)',
+    ...state.items.map((i) => {
+      const p = effectiveUnitPrice(i);
+      return `${i.id} | ${i.status} | ${i.room} | ${p == null ? '-' : p} | ${i.store || '-'} | ${i.name}`;
+    }),
+  ];
+  return lines.join('\n');
+}
+
+// Checks every op and applies them all, or none. Returns
+//   { ok: true, state, summary }   summary is a one-line confirmation
+//   { ok: false, message }         message says what was wrong; state is unchanged
+// The caller stamps updatedAt (stampUpdated) before saving.
+export function applyTextOps(state, ops) {
+  if (!Array.isArray(ops) || !ops.length) return { ok: false, message: 'Nothing to change.' };
+  const next = JSON.parse(JSON.stringify(state));
+  const parts = [];
+  let taskOrder = Math.max(-1, ...next.tasks.map((t) => t.order));
+  let itemOrder = Math.max(-1, ...next.items.map((i) => i.order));
+
+  const fail = (message) => ({ ok: false, message });
+  const checkDate = (v, label) => (ISO_DATE.test(v) ? null : `${label} "${v}" isn't a date I can use.`);
+
+  for (const op of ops) {
+    if (!op || !TEXT_OP_KINDS.includes(op.kind)) return fail(`I don't know how to do "${op && op.kind}".`);
+
+    if (op.kind === 'updateTask' || op.kind === 'addTask') {
+      let status = null;
+      if (has(op, 'status')) {
+        status = pickEnum(TASK_STATUSES, op.status);
+        if (!status) return fail(`"${op.status}" isn't a task status. Use ${TASK_STATUSES.join(', ')}.`);
+      }
+      if (has(op, 'due')) { const e = checkDate(op.due, 'Due date'); if (e) return fail(e); }
+
+      if (op.kind === 'updateTask') {
+        const t = next.tasks.find((x) => x.id === op.taskId);
+        if (!t) return fail("I couldn't tell which task you meant, so nothing changed.");
+        const bits = [];
+        if (status) { t.status = status; bits.push(status === 'Done' ? 'Done' : status); }
+        if (has(op, 'due')) { t.due = op.due; bits.push(`due ${shortDate(op.due)}`); }
+        if (has(op, 'confirmation')) { t.confirmation = String(op.confirmation); bits.push(`confirmation ${op.confirmation}`); }
+        if (has(op, 'notes')) { t.notes = t.notes ? `${t.notes}\n${op.notes}` : String(op.notes); bits.push('note added'); }
+        if (!bits.length) return fail(`I found '${t.title}' but not what to change.`);
+        parts.push(`Marked '${t.title}' ${bits.join(', ')}`);
+      } else {
+        const title = String(op.title || '').trim();
+        if (!title) return fail('A new task needs a title.');
+        if (next.tasks.some((x) => sameName(x.title, title))) return fail(`'${title}' is already a task.`);
+        const category = has(op, 'category') ? pickEnum(TASK_CATEGORIES, op.category) : null;
+        const priority = has(op, 'priority') ? pickEnum(TASK_PRIORITIES, op.priority) : null;
+        const t = createTask({
+          title, category: category || 'Utilities', priority: priority || 'Medium',
+          status: status || 'To do', due: op.due || '', notes: op.notes || '', order: (taskOrder += 1),
+        });
+        next.tasks.push(t);
+        parts.push(`Added task '${t.title}' (${t.category}${t.due ? `, due ${shortDate(t.due)}` : ''})`);
+      }
+      continue;
+    }
+
+    if (op.kind === 'updateItem' || op.kind === 'addItem') {
+      let status = null;
+      if (has(op, 'status')) {
+        status = pickEnum(ITEM_STATUSES, op.status);
+        if (!status) return fail(`"${op.status}" isn't an item status. Use ${ITEM_STATUSES.join(', ')}.`);
+      }
+      if (has(op, 'expectedDelivery')) { const e = checkDate(op.expectedDelivery, 'Delivery date'); if (e) return fail(e); }
+      if (has(op, 'url') && !validUrl(op.url)) return fail(`"${op.url}" isn't a web link.`);
+      const price = has(op, 'unitPrice') ? num(op.unitPrice, null) : null;
+      if (has(op, 'unitPrice') && (price == null || price < 0)) return fail(`"${op.unitPrice}" isn't a price.`);
+
+      let it;
+      const bits = [];
+      if (op.kind === 'updateItem') {
+        it = next.items.find((x) => x.id === op.itemId);
+        if (!it) return fail("I couldn't tell which item you meant, so nothing changed.");
+      } else {
+        const name = String(op.name || '').trim();
+        if (!name) return fail('A new item needs a name.');
+        if (next.items.some((x) => sameName(x.name, name))) return fail(`'${name}' is already on the list. Say what to change about it instead.`);
+        const room = (has(op, 'room') && (next.rooms.find((r) => sameName(r.name, String(op.room))) || {}).name) || 'Whole house';
+        const priority = has(op, 'priority') ? pickEnum(ITEM_PRIORITIES, op.priority) : null;
+        it = createItem({ name, room, category: op.category || 'Other', priority: priority || 'First week', source: 'mine', order: (itemOrder += 1) });
+        next.items.push(it);
+        bits.push(room);
+      }
+
+      if (status && status !== it.status) { it.prevStatus = it.status; it.status = status; }
+      if (status) bits.push(status);
+      if (price != null) { it.unitPrice = price; bits.push(formatMoney(price, { cents: price % 1 !== 0 })); }
+      if (has(op, 'qty')) { it.qty = Math.max(1, Math.round(num(op.qty, 1)) || 1); bits.push(`qty ${it.qty}`); }
+      if (has(op, 'store')) { it.store = String(op.store).trim(); bits.push(it.store); }
+      if (has(op, 'url')) {
+        let link = it.links.find((l) => l.url === op.url);
+        if (!link) {
+          link = createLink({ label: it.store || hostLabel(op.url), url: op.url, price });
+          it.links.push(link);
+        }
+        it.chosenLinkId = link.id;
+        bits.push('link saved');
+      }
+      if (has(op, 'orderNumber')) { it.orderNumber = String(op.orderNumber); bits.push(`order ${it.orderNumber}`); }
+      if (has(op, 'expectedDelivery')) { it.expectedDelivery = op.expectedDelivery; bits.push(`arrives ${shortDate(op.expectedDelivery)}`); }
+      if (has(op, 'notes')) { it.notes = it.notes ? `${it.notes}\n${op.notes}` : String(op.notes); bits.push('note added'); }
+
+      if (op.kind === 'addItem') parts.push(`Added '${it.name}' (${bits.join(', ')})`);
+      else if (!bits.length) return fail(`I found '${it.name}' but not what to change.`);
+      else parts.push(`${status ? 'Marked' : 'Updated'} '${it.name}' ${bits.join(', ')}`);
+      continue;
+    }
+
+    // setDates
+    const bits = [];
+    for (const [key, label] of [['closingDate', 'closing'], ['moveInDate', 'move-in']]) {
+      if (!has(op, key)) continue;
+      const e = checkDate(op[key], `The ${label} date`);
+      if (e) return fail(e);
+      next.settings[key] = op[key];
+      bits.push(`${label} ${shortDate(op[key])}`);
+    }
+    if (!bits.length) return fail('Which date should change?');
+    parts.push(`Set ${bits.join(' and ')}`);
+  }
+
+  return { ok: true, state: normalizeState(next), summary: parts.join('; ') };
+}

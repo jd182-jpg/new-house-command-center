@@ -17,7 +17,7 @@ Then open http://localhost:8080. You need the server because browsers block Java
 npm test
 ```
 
-The tests use Node's built-in test runner (Node 18 or newer), so there is nothing to install. They cover the data model, the budget math, progress, do-next ordering, reordering, the fit check, the stair warnings, the Wi-Fi QR payload, the sync reconcile rules, and a two-device sync run against a fake Firestore.
+The tests use Node's built-in test runner (Node 18 or newer), so there is nothing to install. They cover the data model, the text-update operations and endpoint, the budget math, progress, do-next ordering, reordering, the fit check, the stair warnings, the Wi-Fi QR payload, the sync reconcile rules, and a two-device sync run against a fake Firestore.
 
 ## Files
 
@@ -33,6 +33,9 @@ The tests use Node's built-in test runner (Node 18 or newer), so there is nothin
 | `css/styles.css` | The look: cognac leather, black metal, warm light. Light and dark themes. |
 | `tests/model.test.js` | Unit tests, including the sync reconcile rules. |
 | `tests/sync.test.js` | Two fake devices syncing through a fake Firestore. |
+| `tests/text-ops.test.js` | The text-update operations (mark ordered, add item, and so on). |
+| `tests/worker.test.js` | The text-update endpoint against a fake Firestore, including undo and a mid-save race. |
+| `worker/` | The Cloudflare Worker behind **Text an update** (below). |
 
 Edits to the base seed lists only show up after **Settings > Reset to seed data**, or in a browser that has never opened the app.
 
@@ -112,3 +115,59 @@ The header badge tells you where things stand:
 6. Push (`git push`). Open the site on your laptop **first**, so its list becomes the cloud copy, and wait for the green **Synced** badge. Then open it on your phone, which adopts the same list.
 
 To move data without sync (or as a backup), **Settings > Export JSON** still downloads everything and **Import JSON** loads it on another device.
+
+## Text an update
+
+Say or type something like "ordered the Frame TV from Best Buy, $1,999, arrives Nov 22", "done: called CenterPoint", or "add bar stools to kitchen", and the change shows up on every device within a few seconds. Your phone gets a one-line reply such as `Marked 'Samsung The Frame Pro' Ordered, $1,999, Best Buy, arrives Nov 22.`
+
+**How it works.** An Apple Shortcut named **House** posts your message to a small Cloudflare Worker (`worker/`, live at `https://house-text.leggettcp.workers.dev`). The Worker reads the Firestore document, sends Claude Haiku 5.5 your message plus a list of your tasks and items with their ids, and gets back structured operations. It applies them with `applyTextOps` in `js/model.js` (the same rules the tests cover), stamps a newer `updatedAt`, and writes the document back. Every device then adopts it through the normal sync.
+
+**What it can do:** mark a task done or set its status, due date, confirmation number or a note; add a task; add an item; set an item's status, price, quantity, store, link, order number, expected delivery or a note; and change the closing or move-in date.
+
+**Safety rules.**
+- If Claude isn't sure which task or item you mean, nothing changes and you get a question back ("Which rug, living or dining?").
+- All changes in one message apply together or not at all. Ids that don't exist, made-up statuses and unreadable dates are rejected.
+- It never touches Home Info, so Wi-Fi passwords are never read or written.
+- The write only goes through if nobody else saved in the meantime. If a device did, the Worker re-reads and applies your change on top.
+- Text **undo** to put back the copy from before your last text. It only works until you edit something in the app.
+
+**Cost.** Cloudflare Workers is free at this volume. Each text costs a small fraction of a cent on your Anthropic API key.
+
+### Secrets
+
+The Worker needs two secrets. Neither is in this repo.
+
+| Secret | What it is |
+| --- | --- |
+| `HOUSE_TOKEN` | A long random password the Shortcut sends. A copy lives in `~/.house-text-token` on the laptop (readable only by you). |
+| `ANTHROPIC_API_KEY` | Your key from https://console.anthropic.com (Settings > API Keys). |
+
+To set or change one (you paste the value at the prompt):
+
+```bash
+cd ~/Documents/Projects/new-house-command-center/worker && npx wrangler secret put ANTHROPIC_API_KEY
+```
+
+To redeploy after changing `worker/` or `js/model.js` (the Worker bundles `js/model.js`, so redeploy after model changes too):
+
+```bash
+cd ~/Documents/Projects/new-house-command-center/worker && npm install && npx wrangler deploy
+```
+
+It deploys to the Cloudflare account `Jackson@leggettcp.com's Account` (pinned in `worker/wrangler.toml`). Logs: `npx wrangler tail` in `worker/`.
+
+### Build the House shortcut (iPhone, about 3 minutes)
+
+1. Open **Shortcuts**, tap **+**, and name the shortcut **House** (tap the name at the top).
+2. Tap **Add Action**, search **Ask for Input**, and add it. Tap **Prompt** and type `What changed?`. Leave the input type as **Text**.
+3. Search **Get Contents of URL** and add it. Tap **URL** and enter `https://house-text.leggettcp.workers.dev`.
+4. Tap the **>** arrow on that action:
+   - **Method:** POST.
+   - **Headers:** tap **Add new header**. Key `Authorization`, value `Bearer ` followed by your token (the text in `~/.house-text-token`, no spaces or line breaks after it).
+   - **Request Body:** JSON. Tap **Add new field > Text**, key `text`, and for the value tap the variable bar and choose **Provided Input**.
+5. Search **Show Notification** and add it. Tap the default text, delete it, and pick the **Contents of URL** variable.
+6. Tap **Done**.
+
+Now say "Hey Siri, House" and speak the update, or tap the shortcut and type it. To get the token onto the phone, open `~/.house-text-token` on the Mac and copy it into Notes or AirDrop it, then delete that note after pasting.
+
+**If something's off:** "Not allowed." means the header is wrong (check for `Bearer ` with one space and no trailing newline). "Something went wrong" includes the reason; `npx wrangler tail` shows more.

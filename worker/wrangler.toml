@@ -1,0 +1,14 @@
+name = "house-text"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+# Jackson@leggettcp.com's Account (free Workers plan)
+account_id = "21a5da0dd6d15f9ffcd70551287b02d4"
+
+# Public values (the same ones in js/sync-config.js). Secrets are set with
+# `npx wrangler secret put HOUSE_TOKEN` and `npx wrangler secret put ANTHROPIC_API_KEY`.
+[vars]
+FIREBASE_PROJECT_ID = "home-f9ba8"
+FIREBASE_API_KEY = "AIzaSyAeQRJt3hCkVVU8QrjyqSVwbDP_LyjhwZU"
+FIRESTORE_COLLECTION = "houses"
+FIRESTORE_DOC_ID = "nh-2658c0461f9e466d1e0b637b"
