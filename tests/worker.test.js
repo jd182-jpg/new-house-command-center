@@ -45,8 +45,20 @@ test('rejects a missing or wrong token without reading anything', async () => {
   const deps = { fetch: async () => { calls += 1; }, parse: async () => ({}), now: () => 2000 };
   assert.equal((await handle(post('hi', 'nope'), env, deps)).status, 401);
   assert.equal((await handle(post('hi', 'tok-1234'), env, deps)).status, 401);
+  const noHeader = new Request('https://w/', { method: 'POST', body: 'hi' });
+  assert.match(await (await handle(noHeader, env, deps)).text(), /header is missing/);
+  assert.match(await (await handle(post('hi', 'nope'), env, deps)).text(), /doesn't match/);
   assert.equal(calls, 0);
   assert.equal(db.writes, 0);
+});
+
+test('a pasted token with stray spaces or no Bearer still works', async () => {
+  const db = fakeFirestore(start());
+  const deps = { fetch: db.fetch, now: () => 2000, parse: async () => ({ question: 'Which one?', ops: [] }) };
+  for (const header of ['Bearer tok-123 ', 'bearer  tok-123', 'tok-123', ' Bearer tok-123']) {
+    const req = new Request('https://w/', { method: 'POST', headers: { authorization: header }, body: 'rug' });
+    assert.equal(await (await handle(req, env, deps)).text(), 'Which one?', JSON.stringify(header));
+  }
 });
 
 test('applies ops, stamps a newer updatedAt, and replies with the confirmation', async () => {

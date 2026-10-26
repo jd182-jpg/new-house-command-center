@@ -151,8 +151,11 @@ async function readMessage(request) {
 // deps: { fetch, parse(state, message) -> { question, ops }, now() }
 export async function handle(request, env, deps) {
   if (request.method !== 'POST') return reply('Send a POST with your message.', 405);
-  const auth = request.headers.get('authorization') || '';
-  if (!env.HOUSE_TOKEN || !safeEqual(auth, `Bearer ${env.HOUSE_TOKEN}`)) return reply('Not allowed.', 401);
+  // Forgiving about stray spaces, line breaks and a missing "Bearer " from a pasted header.
+  const auth = (request.headers.get('authorization') || '').trim();
+  if (!auth) return reply('Not allowed: the Authorization header is missing.', 401);
+  const token = auth.replace(/^bearer\s+/i, '').trim();
+  if (!env.HOUSE_TOKEN || !safeEqual(token, env.HOUSE_TOKEN)) return reply("Not allowed: the token doesn't match.", 401);
 
   const message = await readMessage(request);
   if (!message) return reply('Say what changed, like "ordered the Frame TV from Best Buy, $1,999".');
