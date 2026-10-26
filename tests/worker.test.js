@@ -46,7 +46,7 @@ test('rejects a missing or wrong token without reading anything', async () => {
   assert.equal((await handle(post('hi', 'nope'), env, deps)).status, 401);
   assert.equal((await handle(post('hi', 'tok-1234'), env, deps)).status, 401);
   const noHeader = new Request('https://w/', { method: 'POST', body: 'hi' });
-  assert.match(await (await handle(noHeader, env, deps)).text(), /header is missing/);
+  assert.match(await (await handle(noHeader, env, deps)).text(), /no token/);
   assert.match(await (await handle(post('hi', 'nope'), env, deps)).text(), /doesn't match/);
   assert.equal(calls, 0);
   assert.equal(db.writes, 0);
@@ -59,6 +59,10 @@ test('a pasted token with stray spaces or no Bearer still works', async () => {
     const req = new Request('https://w/', { method: 'POST', headers: { authorization: header }, body: 'rug' });
     assert.equal(await (await handle(req, env, deps)).text(), 'Which one?', JSON.stringify(header));
   }
+  const inBody = new Request('https://w/', { method: 'POST', body: JSON.stringify({ text: 'rug', token: ' tok-123 ' }) });
+  assert.equal(await (await handle(inBody, env, deps)).text(), 'Which one?');
+  const wrongInBody = new Request('https://w/', { method: 'POST', body: JSON.stringify({ text: 'rug', token: 'tok-1' }) });
+  assert.equal((await handle(wrongInBody, env, deps)).status, 401);
 });
 
 test('applies ops, stamps a newer updatedAt, and replies with the confirmation', async () => {

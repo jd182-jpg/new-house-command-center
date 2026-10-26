@@ -140,24 +140,29 @@ function safeEqual(a, b) {
 
 const reply = (text, status = 200) => new Response(text, { status, headers: { 'content-type': 'text/plain; charset=utf-8' } });
 
-async function readMessage(request) {
+// Body is JSON { text, token? } or plain text. The token may ride in the body because the
+// Shortcuts header editor is easy to get wrong.
+async function readBody(request) {
   const raw = (await request.text()).trim();
   if (raw.startsWith('{')) {
-    try { return String(JSON.parse(raw).text || '').trim(); } catch { return ''; }
+    try {
+      const body = JSON.parse(raw);
+      return { message: String(body.text || '').trim(), token: String(body.token || '') };
+    } catch { return { message: '', token: '' }; }
   }
-  return raw;
+  return { message: raw, token: '' };
 }
 
 // deps: { fetch, parse(state, message) -> { question, ops }, now() }
 export async function handle(request, env, deps) {
   if (request.method !== 'POST') return reply('Send a POST with your message.', 405);
-  // Forgiving about stray spaces, line breaks and a missing "Bearer " from a pasted header.
-  const auth = (request.headers.get('authorization') || '').trim();
-  if (!auth) return reply('Not allowed: the Authorization header is missing.', 401);
+  const { message, token: bodyToken } = await readBody(request);
+  // Forgiving about stray spaces and a missing "Bearer " in a pasted token.
+  const auth = ((request.headers.get('authorization') || '').trim() || bodyToken.trim());
+  if (!auth) return reply('Not allowed: no token. Add a "token" field to the JSON body.', 401);
   const token = auth.replace(/^bearer\s+/i, '').trim();
   if (!env.HOUSE_TOKEN || !safeEqual(token, env.HOUSE_TOKEN)) return reply("Not allowed: the token doesn't match.", 401);
 
-  const message = await readMessage(request);
   if (!message) return reply('Say what changed, like "ordered the Frame TV from Best Buy, $1,999".');
   if (message.length > MAX_MESSAGE) return reply('That message is too long. Keep it to a sentence or two.');
 
