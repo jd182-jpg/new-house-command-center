@@ -163,11 +163,12 @@ It deploys to the Cloudflare account `Jackson@leggettcp.com's Account` (pinned i
 3. Search **Get Contents of URL** and add it. Tap **URL** and enter `https://house-text.leggettcp.workers.dev`.
 4. Tap the **>** arrow on that action:
    - **Method:** POST.
-   - **Headers:** tap **Add new header**. Key `Authorization`, value `Bearer ` followed by your token (the text in `~/.house-text-token`, no spaces or line breaks after it).
    - **Request Body:** JSON. Tap **Add new field > Text**, key `text`, and for the value tap the variable bar and choose **Provided Input**.
+   - Tap **Add new field > Text** again: key `token`, value your token (the text in `~/.house-text-token`).
+   - No headers needed. (An `Authorization: Bearer <token>` header also works, but the Shortcuts header editor is easy to get wrong.)
 5. Search **Show Notification** and add it. Tap the default text, delete it, and pick the **Contents of URL** variable.
 6. Tap **Done**.
 
 Now say "Hey Siri, House" and speak the update, or tap the shortcut and type it. To get the token onto the phone, open `~/.house-text-token` on the Mac and copy it into Notes or AirDrop it, then delete that note after pasting.
 
-**If something's off:** "Not allowed." means the header is wrong (check for `Bearer ` with one space and no trailing newline). "Something went wrong" includes the reason; `npx wrangler tail` shows more.
+**If something's off:** "Not allowed: no token" means the `token` field is missing or its key is misspelled. "the token doesn't match" means the value is wrong; paste it again. "Something went wrong" includes the reason; `npx wrangler tail` shows more.
