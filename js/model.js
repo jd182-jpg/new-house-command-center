@@ -1,7 +1,7 @@
 // Pure data logic for the New House Command Center.
 // No DOM, no storage: everything here is unit tested in tests/model.test.js.
 
-export const TASK_CATEGORIES = ['Closing', 'Utilities', 'Internet and Wi-Fi', 'Address Changes', 'Mail'];
+export const TASK_CATEGORIES = ['Closing', 'Repairs', 'Utilities', 'Internet and Wi-Fi', 'Address Changes', 'Mail'];
 export const TASK_STATUSES = ['To do', 'In progress', 'Waiting', 'Done'];
 export const TASK_PRIORITIES = ['High', 'Medium', 'Low'];
 

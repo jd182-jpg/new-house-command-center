@@ -421,7 +421,7 @@ function viewTasks() {
   }
 
   return `
-  <div class="page-head"><div><h1>Tasks</h1><p>Utilities, Wi-Fi, address changes, and mail. Tap a task for the how-to.</p></div>
+  <div class="page-head"><div><h1>Tasks</h1><p>Closing, repairs, utilities, Wi-Fi, address changes, and mail. Tap a task for the how-to.</p></div>
     <div class="segmented" role="tablist">
       <button class="${ui.taskView === 'category' ? 'on' : ''}" data-act="task-view" data-v="category">By category</button>
       <button class="${ui.taskView === 'due' ? 'on' : ''}" data-act="task-view" data-v="due">By due date</button>

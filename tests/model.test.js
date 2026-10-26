@@ -14,7 +14,9 @@ test('seed builds a valid state with every task category covered', () => {
   const state = buildStateFromSeed(seed);
   assert.ok(state.tasks.length > 20);
   assert.ok(state.items.length > 50);
-  for (const c of TASK_CATEGORIES) assert.ok(state.tasks.some((t) => t.category === c), c);
+  // Repairs come from the inspection reports in the live data, not the seed.
+  for (const c of TASK_CATEGORIES.filter((x) => x !== 'Repairs')) assert.ok(state.tasks.some((t) => t.category === c), c);
+  assert.equal(createTask({ title: 'Fix shower leak', category: 'Repairs' }).category, 'Repairs');
   assert.equal(state.settings.closingDate, '2026-11-13');
   assert.equal(state.settings.moveInDate, '2026-11-20');
   const ids = new Set([...state.tasks, ...state.items].map((x) => x.id));
