@@ -323,3 +323,17 @@ test('seed updates fill gaps in existing data without clobbering your edits', ()
   assert.equal(applySeedUpdates(state, seed.updates).changed, false);
   assert.equal(old.appliedUpdates.length, 0, 'input is not mutated');
 });
+
+test('closing tasks filed under Utilities move back to Closing, by id, once', () => {
+  const live = buildStateFromSeed(seed);
+  for (const t of live.tasks) if (t.id.startsWith('closing-')) t.category = 'Utilities';
+  live.tasks.find((t) => t.id === 'closing-day').title = 'Closing day (renamed)';
+  live.appliedUpdates = live.appliedUpdates.filter((id) => id !== '2026-10-26-closing-category');
+  const { state, changed } = applySeedUpdates(live, seed.updates);
+  assert.ok(changed);
+  const closing = state.tasks.filter((t) => t.id.startsWith('closing-'));
+  assert.equal(closing.length, 13);
+  assert.ok(closing.every((t) => t.category === 'Closing'));
+  assert.equal(state.tasks.find((t) => t.title === 'Set up natural gas service').category, 'Utilities');
+  assert.equal(applySeedUpdates(state, seed.updates).changed, false);
+});

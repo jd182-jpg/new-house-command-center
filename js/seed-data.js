@@ -324,6 +324,9 @@ export const homeInfo = {
 // remembered by id), only fills blanks in settings, adds tasks by id, and edits seeded tasks
 // and items by exact title or name. To add more later, append a new object with a new id.
 const C = (id, priority, due, title, hint, extra = {}) => ({ id, category: 'Closing', priority, due, title, hint, ...extra });
+const CLOSING_IDS = ['closing-hoa-docs', 'closing-title-commitment', 'closing-survey', 'closing-objections',
+  'closing-insurance-leaseback', 'closing-settlement', 'closing-repair-docs', 'closing-wire', 'closing-walkthrough',
+  'closing-day', 'closing-leaseback-end', 'closing-deposit-refund', 'closing-stucco'];
 
 export const updates = [
   {
@@ -380,6 +383,11 @@ export const updates = [
       { role: 'Title company', name: 'Alamo Title', phone: '', email: '' },
     ],
     appendNotes: 'Contract: price $614,584 (repair amendment signed 10/17). Closing on or before 11/13/2026 at Alamo Title. Seller leaseback 11/13 to 11/20 at $200 per day, $1,000 deposit, $500 per day holdover. Refrigerator, washer, and dryer convey.',
+  },
+  {
+    // A device running a cached copy of the older app filed the closing tasks under Utilities.
+    id: '2026-10-26-closing-category',
+    editTasks: CLOSING_IDS.map((id) => ({ id, set: { category: 'Closing' } })),
   },
 ];
 

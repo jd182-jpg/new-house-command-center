@@ -131,8 +131,8 @@ export function normalizeState(raw) {
 
 // Seed updates deliver new facts to data you are already using, once per update id.
 // They only fill gaps: new tasks are added by id, settings are set only when blank, and
-// edits to existing tasks and items match by title or name and leave deleted ones alone.
-// update: { id, settings, addTasks, editTasks: [{ title, set }], editItems: [{ name, set }],
+// edits to existing tasks and items match by title or name (or a task's id) and leave deleted ones alone.
+// update: { id, settings, addTasks, editTasks: [{ title | id, set }], editItems: [{ name, set }],
 //           addContacts, appendNotes }
 export function pendingUpdates(state, updates = []) {
   const done = new Set(state.appliedUpdates || []);
@@ -152,8 +152,8 @@ export function applySeedUpdates(state, updates = []) {
     for (const t of u.addTasks || []) {
       if (!next.tasks.some((x) => x.id === t.id)) next.tasks.push(createTask({ ...t, order: (order += 1) }));
     }
-    for (const { title, set } of u.editTasks || []) {
-      const t = next.tasks.find((x) => x.title === title);
+    for (const { id, title, set } of u.editTasks || []) {
+      const t = next.tasks.find((x) => (id ? x.id === id : x.title === title));
       if (t) Object.assign(t, setOrFill(t, set));
     }
     for (const { name, set } of u.editItems || []) {
