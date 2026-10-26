@@ -375,6 +375,9 @@ td select { width: auto; min-height: 30px; padding: 3px 8px; font-size: 13px; }
 .papers { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
 .papers a { margin-left: 4px; }
 details.past { margin-top: 10px; }
+.more-files { display: inline; }
+.more-files summary { display: inline; cursor: pointer; color: var(--muted); }
+.more-files[open] { display: flex; flex-wrap: wrap; gap: 4px 12px; width: 100%; }
 .card-head { flex-wrap: wrap; }
 .card-head .segmented { max-width: 100%; overflow-x: auto; }
 details.past summary { cursor: pointer; }

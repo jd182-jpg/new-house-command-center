@@ -18,6 +18,7 @@ const ui = Object.assign({
   sort: { key: 'room', dir: 1 },
   shopHideGot: false,
   docKind: '',
+  docFilters: { q: '' },
 }, readUi());
 const openTasks = new Set();
 let lastDeleted = null;
@@ -307,10 +308,13 @@ function apptLi(a) {
 }
 
 function fileLinks(d) {
-  return d.files.map((f) => {
+  const links = d.files.map((f) => {
     const url = safeUrl(f.webUrl);
     return url ? `<a href="${esc(url)}" target="_blank" rel="noopener" title="${esc(f.path)}">${esc(f.name)} ↗</a>` : `<span>${esc(f.name)}</span>`;
-  }).join(' ');
+  });
+  // Photo sets can hold 20 files; show two and fold the rest away.
+  if (links.length <= 3) return links.join(' ');
+  return `${links.slice(0, 2).join(' ')}<details class="more-files"><summary>+${links.length - 2} more</summary>${links.slice(2).join(' ')}</details>`;
 }
 
 // Docs and appointments linked to one task or item, for the task row and item editor.
@@ -326,7 +330,9 @@ function linkedPapers(key, id) {
 
 function viewFiles() {
   const kinds = M.DOC_KINDS.filter((k) => state.documents.some((d) => d.kind === k));
+  const q = ((ui.docFilters && ui.docFilters.q) || '').trim().toLowerCase();
   const docs = state.documents.filter((d) => !ui.docKind || d.kind === ui.docKind)
+    .filter((d) => !q || `${d.title} ${d.vendor} ${d.summary} ${d.kind}`.toLowerCase().includes(q))
     .sort((a, b) => (b.date || b.addedAt || '').localeCompare(a.date || a.addedAt || ''));
   const up = upcoming();
   const past = state.appointments.filter((a) => !up.includes(a)).sort((a, b) => b.date.localeCompare(a.date));
@@ -345,6 +351,7 @@ function viewFiles() {
       <div class="card-head"><h2>Documents</h2>
         ${kinds.length > 1 ? `<div class="segmented"><button class="${ui.docKind ? '' : 'on'}" data-act="doc-kind" data-v="">All</button>${kinds.map((k) => `<button class="${ui.docKind === k ? 'on' : ''}" data-act="doc-kind" data-v="${esc(k)}">${esc(k)}</button>`).join('')}</div>` : ''}
       </div>
+      ${state.documents.length > 8 ? `<div class="toolbar"><input type="search" placeholder="Search documents" value="${esc(q)}" data-filter="doc" data-key="q" aria-label="Search documents"></div>` : ''}
       ${docs.length ? `<ul class="donext">${docs.map((d) => {
     const on = linkedName(d);
     return `<li class="doc-row">
@@ -357,7 +364,7 @@ function viewFiles() {
           <button class="icon-btn" data-act="delete-doc" data-id="${d.id}" title="Remove from the list (the file stays in OneDrive)">${ICON.x}</button>
         </li>`;
   }).join('')}</ul>`
-    : empty('🗂️', ui.docKind ? `No ${ui.docKind.toLowerCase()} documents.` : 'No documents yet.', 'Forward an estimate or warranty email to house@darr.solutions to file it.')}
+    : empty('🗂️', q ? 'Nothing matches that search.' : ui.docKind ? `No ${ui.docKind.toLowerCase()} documents.` : 'No documents yet.', q ? 'Try a vendor or a word from the title.' : 'Forward an estimate or warranty email to house@darr.solutions to file it.')}
     </section>
   </div>`;
 }
@@ -1066,7 +1073,7 @@ document.addEventListener('change', async (e) => {
 });
 
 function handleFilter(el) {
-  const target = el.dataset.filter === 'task' ? ui.taskFilters : ui.shopFilters;
+  const target = el.dataset.filter === 'task' ? ui.taskFilters : el.dataset.filter === 'doc' ? (ui.docFilters ||= { q: '' }) : ui.shopFilters;
   target[el.dataset.key] = el.type === 'checkbox' ? el.checked : el.value;
   saveUi();
   const pos = el.type === 'search' ? el.selectionStart : null;
