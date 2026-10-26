@@ -118,9 +118,18 @@ To move data without sync (or as a backup), **Settings > Export JSON** still dow
 
 ## Text an update
 
-Say or type something like "ordered the Frame TV from Best Buy, $1,999, arrives Nov 22", "done: called CenterPoint", or "add bar stools to kitchen", and the change shows up on every device within a few seconds. Your phone gets a one-line reply such as `Marked 'Samsung The Frame Pro' Ordered, $1,999, Best Buy, arrives Nov 22.`
+Two ways in: **email house@darr.solutions** (simplest, works from any phone or computer), or the **House** Apple Shortcut. Either way, say or type something like "ordered the Frame TV from Best Buy, $1,999, arrives Nov 22", "done: called CenterPoint", or "add bar stools to kitchen", and the change shows up on every device within a few seconds. Your phone gets a one-line reply such as `Marked 'Samsung The Frame Pro' Ordered, $1,999, Best Buy, arrives Nov 22.`
 
-**How it works.** An Apple Shortcut named **House** posts your message to a small Cloudflare Worker (`worker/`, live at `https://house-text.leggettcp.workers.dev`). The Worker reads the Firestore document, sends Claude Haiku 5.5 your message plus a list of your tasks and items with their ids, and gets back structured operations. It applies them with `applyTextOps` in `js/model.js` (the same rules the tests cover), stamps a newer `updatedAt`, and writes the document back. Every device then adopts it through the normal sync.
+**How it works.** The email (or an Apple Shortcut named **House**) sends your message to a small Cloudflare Worker (`worker/`, live at `https://house-text.leggettcp.workers.dev`). The Worker reads the Firestore document, sends Claude Haiku 5.5 your message plus a list of your tasks and items with their ids, and gets back structured operations. It applies them with `applyTextOps` in `js/model.js` (the same rules the tests cover), stamps a newer `updatedAt`, and writes the document back. Every device then adopts it through the normal sync.
+
+### By email
+
+Send your update to **house@darr.solutions**, in the body or just the subject. A reply from "2608 House" arrives in a few seconds with the confirmation, or a question if it wasn't sure. Reply **undo** to that email to take the change back.
+
+- Only mail from the addresses in the `ALLOWED_SENDERS` secret is read (currently your Rice, Outlook and Leggett addresses), and only if it passed SPF or DKIM, so a faked From is rejected.
+- Quoted replies and signatures ("Sent from my iPhone") are ignored.
+- How it's wired: darr.solutions uses Cloudflare nameservers (the domain is still registered at GoDaddy). Cloudflare **Email > Email Routing** has a custom address `house` with the action **Send to a Worker > house-text**. The `email` handler in `worker/src/index.js` reads the message and calls the same `processMessage` as the web endpoint.
+- To change who can send: `npx wrangler secret put ALLOWED_SENDERS` in `worker/`, then paste a comma separated list.
 
 **What it can do:** mark a task done or set its status, due date, confirmation number or a note; add a task; add an item; set an item's status, price, quantity, store, link, order number, expected delivery or a note; and change the closing or move-in date.
 
@@ -141,6 +150,7 @@ The Worker needs two secrets. Neither is in this repo.
 | --- | --- |
 | `HOUSE_TOKEN` | A long random password the Shortcut sends. A copy lives in `~/.house-text-token` on the laptop (readable only by you). |
 | `ANTHROPIC_API_KEY` | Your key from https://console.anthropic.com (Settings > API Keys). |
+| `ALLOWED_SENDERS` | Comma separated email addresses allowed to send updates. Kept out of the repo for privacy. |
 
 To set or change one (you paste the value at the prompt):
 
