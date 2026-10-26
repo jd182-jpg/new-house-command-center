@@ -1,6 +1,7 @@
 name = "house-text"
 main = "src/index.js"
 compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 # Jackson@leggettcp.com's Account (free Workers plan)
 account_id = "21a5da0dd6d15f9ffcd70551287b02d4"
@@ -12,3 +13,10 @@ FIREBASE_PROJECT_ID = "home-f9ba8"
 FIREBASE_API_KEY = "AIzaSyAeQRJt3hCkVVU8QrjyqSVwbDP_LyjhwZU"
 FIRESTORE_COLLECTION = "houses"
 FIRESTORE_DOC_ID = "nh-2658c0461f9e466d1e0b637b"
+# The "House Command Center" app registration (personal Microsoft accounts). Not a secret.
+MS_CLIENT_ID = "34f93536-4f0c-4751-8baf-19967a8a418c"
+
+# Holds the Microsoft (OneDrive) refresh token, which renews on each use.
+[[kv_namespaces]]
+binding = "KV"
+id = "bb93108ec64b48f1b4ade9a0773d34cb"

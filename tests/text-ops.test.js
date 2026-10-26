@@ -123,3 +123,76 @@ test('shortDate and no em dashes in confirmations', () => {
   assert.ok(r.summary.includes('$12.50'));
   assert.ok(!r.summary.includes('\u2014'));
 });
+
+test('appointments: add, reschedule, cancel, and reject bad times or duplicates', () => {
+  const s = fresh();
+  const hvac = s.tasks.find((t) => t.title === 'Plan the HVAC replacement');
+  const r = applyTextOps(s, [{ kind: 'addAppointment', title: 'HVAC estimate visit', date: '2026-11-03', start: '09:00', end: '11:30', who: 'Autumn Mechanical', phone: '713-555-0100', taskId: hvac.id }]);
+  assert.equal(r.ok, true);
+  assert.equal(r.summary, "Added appointment 'HVAC estimate visit' Nov 3 9am-11:30am with Autumn Mechanical");
+  const a = r.state.appointments[0];
+  assert.equal(a.status, 'Scheduled');
+  assert.equal(a.taskId, hvac.id);
+
+  const moved = applyTextOps(r.state, [{ kind: 'updateAppointment', appointmentId: a.id, date: '2026-11-05', start: '13:00', end: '' }]);
+  assert.equal(moved.summary, "Updated appointment 'HVAC estimate visit' Nov 5 1pm-11:30am");
+  const canceled = applyTextOps(moved.state, [{ kind: 'updateAppointment', appointmentId: a.id, status: 'canceled' }]);
+  assert.match(canceled.summary, /^Canceled appointment/);
+
+  for (const bad of [
+    [{ kind: 'addAppointment', title: 'HVAC estimate visit', date: '2026-11-03' }],
+    [{ kind: 'addAppointment', title: 'Movers', date: '2026-11-20', start: '9am' }],
+    [{ kind: 'addAppointment', title: 'Movers' }],
+    [{ kind: 'addAppointment', title: 'Movers', date: '2026-11-20', taskId: 'nope' }],
+    [{ kind: 'updateAppointment', appointmentId: 'nope', date: '2026-11-21' }],
+  ]) assert.equal(applyTextOps(r.state, bad).ok, false, JSON.stringify(bad));
+});
+
+test('documents: filed with kind, amount, expiry, files and a link to an item', () => {
+  const s = fresh();
+  const wd = s.items.find((i) => i.name === 'Washer and dryer');
+  const files = [{ name: '2026-11-21 LG - washer warranty.pdf', path: '08 Warranties and Receipts/2026-11-21 LG - washer warranty.pdf', webUrl: 'https://onedrive.live.com/x', driveId: 'ABC!1', size: 1200 }];
+  const r = applyTextOps(s, [{ kind: 'addDocument', title: 'LG washer warranty', docKind: 'Warranty', vendor: 'LG', date: '2026-11-21', expires: '2027-11-21', files, itemId: wd.id }]);
+  assert.equal(r.ok, true);
+  assert.equal(r.summary, "Filed 'LG washer warranty' (Warranty, LG, expires Nov 21, 1 file, linked to 'Washer and dryer')");
+  assert.deepEqual(r.state.documents[0].files, files);
+
+  const est = applyTextOps(s, [{ kind: 'addDocument', title: 'HVAC replacement estimate', docKind: 'estimate', amount: '$14,200', vendor: 'Autumn Mechanical' }]);
+  assert.equal(est.summary, "Filed 'HVAC replacement estimate' (Estimate, Autumn Mechanical, $14,200)");
+  assert.equal(est.state.documents[0].amount, 14200);
+
+  for (const bad of [
+    [{ kind: 'addDocument', title: 'x', docKind: 'Brochure' }],
+    [{ kind: 'addDocument', title: 'x', expires: 'next year' }],
+    [{ kind: 'addDocument', title: 'x', itemId: 'nope' }],
+    [{ kind: 'addDocument', title: '' }],
+  ]) assert.equal(applyTextOps(s, bad).ok, false, JSON.stringify(bad));
+});
+
+test('contacts: added once, blanks filled, nothing else in Home Info touched', () => {
+  const s = fresh();
+  const r = applyTextOps(s, [{ kind: 'addContact', role: 'Plumber', name: 'Bayou Plumbing', phone: '713-555-0100' }]);
+  assert.equal(r.summary, 'Added contact Bayou Plumbing (Plumber)');
+  const again = applyTextOps(r.state, [{ kind: 'addContact', name: 'bayou plumbing', email: 'service@bayou.example', phone: '000' }]);
+  assert.equal(again.summary, 'Updated contact Bayou Plumbing');
+  const c = again.state.homeInfo.contacts.find((x) => x.name === 'Bayou Plumbing');
+  assert.equal(c.phone, '713-555-0100', 'your phone number wins');
+  assert.equal(c.email, 'service@bayou.example');
+  // Autumn Mechanical is already there, so it isn't duplicated.
+  const autumn = applyTextOps(s, [{ kind: 'addContact', role: 'HVAC', name: 'Autumn Mechanical', phone: '1' }]);
+  assert.equal(autumn.state.homeInfo.contacts.filter((x) => x.name === 'Autumn Mechanical').length, 1);
+  assert.equal(autumn.state.homeInfo.contacts.find((x) => x.name === 'Autumn Mechanical').phone, '713-864-8368');
+  // The empty Designer row gets its name filled instead of a duplicate row.
+  const designer = applyTextOps(s, [{ kind: 'addContact', role: 'Designer', name: 'Jackie' }]);
+  assert.equal(designer.state.homeInfo.contacts.filter((x) => x.role === 'Designer').length, 1);
+  assert.equal(again.state.homeInfo.wifiPassword, 'secret-pass');
+});
+
+test('old saved data without appointments or documents still loads', () => {
+  const s = fresh();
+  delete s.appointments;
+  delete s.documents;
+  const r = applyTextOps(s, [{ kind: 'addTask', title: 'x' }]);
+  assert.deepEqual(r.state.appointments, []);
+  assert.deepEqual(r.state.documents, []);
+});

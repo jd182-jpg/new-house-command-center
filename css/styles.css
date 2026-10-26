@@ -75,7 +75,7 @@ svg { display: block; }
 .tabs { display: flex; gap: 4px; margin-left: auto; }
 .tabs a {
   display: flex; align-items: center; gap: 7px; padding: 8px 12px; border-radius: 999px;
-  text-decoration: none; color: var(--muted); font-weight: 500; font-size: 14px;
+  text-decoration: none; color: var(--muted); font-weight: 500; font-size: 14px; white-space: nowrap;
 }
 .tabs a svg { width: 18px; height: 18px; fill: currentColor; }
 .tabs a:hover { background: var(--surface-2); color: var(--ink); }
@@ -329,7 +329,13 @@ td select { width: auto; min-height: 30px; padding: 3px 8px; font-size: 13px; }
 .toast button { background: none; border: 0; color: var(--accent); font-weight: 600; cursor: pointer; padding: 0; }
 
 /* ---------- Responsive ---------- */
+@media (max-width: 1080px) {
+  .tabs a { padding: 8px 9px; gap: 5px; }
+}
 @media (max-width: 960px) {
+  .tabs a svg { display: none; }
+  .brand-text strong { white-space: nowrap; }
+  .brand-text small { display: none; }
   .span-4, .span-5, .span-6, .span-7, .span-8 { grid-column: span 12; }
   .budget-strip { grid-template-columns: 1fr 1fr; }
   .budget-strip > :first-child { grid-column: 1 / -1; }
@@ -341,7 +347,8 @@ td select { width: auto; min-height: 30px; padding: 3px 8px; font-size: 13px; }
     position: fixed; bottom: 0; left: 0; right: 0; justify-content: space-around; margin: 0; z-index: 30;
     background: var(--surface); border-top: 1px solid var(--line); padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
   }
-  .tabs a { flex-direction: column; gap: 2px; font-size: 11px; padding: 6px 8px; border-radius: 10px; }
+  .tabs a { flex-direction: column; gap: 2px; font-size: 11px; padding: 6px 4px; border-radius: 10px; }
+  .tabs a svg { display: block; }
   .tabs a.active { background: var(--accent-soft); color: var(--accent); }
   main { padding: 16px 16px 110px; }
   h1 { font-size: 26px; }
@@ -359,3 +366,16 @@ td select { width: auto; min-height: 30px; padding: 3px 8px; font-size: 13px; }
   .countdown .big-num { font-size: 52px; }
   .toast { bottom: 90px; }
 }
+
+/* Files and appointments */
+.doc-row { align-items: flex-start !important; }
+.doc-row strong { white-space: nowrap; }
+.doc-summary { margin: 6px 0 0; font-size: 13.5px; color: var(--ink); }
+.doc-files { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; font-size: 13px; }
+.papers { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.papers a { margin-left: 4px; }
+details.past { margin-top: 10px; }
+.card-head { flex-wrap: wrap; }
+.card-head .segmented { max-width: 100%; overflow-x: auto; }
+details.past summary { cursor: pointer; }
+.donext li.muted .title { color: var(--muted); }

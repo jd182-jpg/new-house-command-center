@@ -11,6 +11,9 @@ export const ITEM_STATUSES = ['Idea', 'Researching', 'Ordered', 'Shipped', 'Deli
 export const PURCHASED_STATUSES = ['Ordered', 'Shipped', 'Delivered', 'Placed'];
 export const STAIR_OPTIONS = ['Need to check', 'Yes', 'No'];
 
+export const DOC_KINDS = ['Estimate', 'Warranty', 'Notice', 'Receipt', 'Contract', 'Insurance', 'Manual', 'Other'];
+export const APPOINTMENT_STATUSES = ['Scheduled', 'Done', 'Canceled'];
+
 export const SCHEMA_VERSION = 1;
 
 let idCounter = 0;
@@ -86,6 +89,49 @@ export function createItem(fields = {}) {
   };
 }
 
+const hhmm = (v) => (/^([01]\d|2[0-3]):[0-5]\d$/.test(v || '') ? v : '');
+
+// A visit or booking: install, inspection, delivery window, HOA meeting.
+export function createAppointment(fields = {}) {
+  return {
+    id: fields.id || makeId('appt'),
+    title: (fields.title || '').trim() || 'Appointment',
+    date: fields.date || '',
+    start: hhmm(fields.start),
+    end: hhmm(fields.end),
+    status: APPOINTMENT_STATUSES.includes(fields.status) ? fields.status : 'Scheduled',
+    who: fields.who || '',
+    phone: fields.phone || '',
+    location: fields.location || '',
+    confirmation: fields.confirmation || '',
+    notes: fields.notes || '',
+    taskId: fields.taskId || null,
+    itemId: fields.itemId || null,
+    source: fields.source || 'manual',
+  };
+}
+
+// A filed paper: estimate, warranty, notice, receipt. Files live in OneDrive; this keeps the facts and links.
+export function createDocument(fields = {}) {
+  return {
+    id: fields.id || makeId('doc'),
+    title: (fields.title || '').trim() || 'Document',
+    kind: DOC_KINDS.includes(fields.kind) ? fields.kind : 'Other',
+    vendor: fields.vendor || '',
+    amount: fields.amount === '' || fields.amount == null ? null : num(fields.amount, null),
+    date: fields.date || '',
+    expires: fields.expires || '',
+    summary: fields.summary || '',
+    files: Array.isArray(fields.files)
+      ? fields.files.filter((f) => f && f.name).map((f) => ({ name: String(f.name), path: f.path || '', webUrl: f.webUrl || '', driveId: f.driveId || '', size: Number(f.size) || 0 }))
+      : [],
+    taskId: fields.taskId || null,
+    itemId: fields.itemId || null,
+    source: fields.source || 'manual',
+    addedAt: fields.addedAt || '',
+  };
+}
+
 // Builds a fresh app state from the seed module.
 export function buildStateFromSeed(seed) {
   const base = normalizeState({
@@ -121,6 +167,8 @@ export function normalizeState(raw) {
     items: raw.items.map(createItem),
     homeInfo: raw.homeInfo && typeof raw.homeInfo === 'object' ? raw.homeInfo : {},
     rooms: Array.isArray(raw.rooms) ? raw.rooms : [],
+    appointments: Array.isArray(raw.appointments) ? raw.appointments.map(createAppointment) : [],
+    documents: Array.isArray(raw.documents) ? raw.documents.map(createDocument) : [],
     appliedUpdates: Array.isArray(raw.appliedUpdates) ? raw.appliedUpdates.filter((x) => typeof x === 'string') : [],
     // Milliseconds of the last edit. 0 means untouched seed data, so any real copy beats it.
     updatedAt: Number.isFinite(raw.updatedAt) && raw.updatedAt > 0 ? raw.updatedAt : 0,
@@ -462,10 +510,15 @@ export function formatMoney(n, { cents = false } = {}) {
 //   updateItem { itemId, status?, unitPrice?, qty?, store?, url?, orderNumber?, expectedDelivery?, notes? }
 //   addItem    { name, room?, category?, priority?, status?, unitPrice?, qty?, store?, url?, notes? }
 //   setDates   { closingDate?, moveInDate? }
+//   addAppointment    { title, date, start?, end?, who?, phone?, location?, confirmation?, notes?, taskId?, itemId? }
+//   updateAppointment { appointmentId, date?, start?, end?, status?, who?, phone?, location?, confirmation?, notes? }
+//   addDocument { title, docKind?, vendor?, amount?, date?, expires?, summary?, files?, taskId?, itemId? }
+//   addContact  { role, name, phone?, email? }
 //
-// Nothing in here ever reads or writes homeInfo, so Wi-Fi passwords can't be touched.
+// The only part of homeInfo touched is the contact list, so Wi-Fi passwords can't be.
 
-export const TEXT_OP_KINDS = ['updateTask', 'addTask', 'updateItem', 'addItem', 'setDates'];
+export const TEXT_OP_KINDS = ['updateTask', 'addTask', 'updateItem', 'addItem', 'setDates',
+  'addAppointment', 'updateAppointment', 'addDocument', 'addContact'];
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -509,7 +562,40 @@ export function describeForParser(state) {
       return `${i.id} | ${i.status} | ${i.room} | ${p == null ? '-' : p} | ${i.store || '-'} | ${i.name}`;
     }),
   ];
+  const appts = state.appointments || [];
+  if (appts.length) {
+    lines.push('', 'APPOINTMENTS (id | status | date | time | who | title)',
+      ...appts.map((a) => `${a.id} | ${a.status} | ${a.date || '-'} | ${a.start || '-'} | ${a.who || '-'} | ${a.title}`));
+  }
+  const docs = state.documents || [];
+  if (docs.length) {
+    lines.push('', 'DOCUMENTS (id | kind | date | vendor | title)',
+      ...docs.map((d) => `${d.id} | ${d.kind} | ${d.date || '-'} | ${d.vendor || '-'} | ${d.title}`));
+  }
   return lines.join('\n');
+}
+
+const APPT_FIELDS = ['date', 'start', 'end', 'who', 'phone', 'location', 'confirmation', 'notes', 'taskId', 'itemId'];
+const DOC_FIELDS = ['vendor', 'date', 'expires', 'summary', 'files', 'taskId', 'itemId'];
+
+function pickFields(op, keys) {
+  const out = {};
+  for (const k of keys) if (has(op, k)) out[k] = k === 'files' ? op[k] : (typeof op[k] === 'string' ? op[k].trim() : op[k]);
+  return out;
+}
+
+// taskId and itemId must point at rows that exist.
+function checkLinks(state, op) {
+  if (has(op, 'taskId') && !state.tasks.some((t) => t.id === op.taskId)) return "I couldn't find the task to link that to, so nothing changed.";
+  if (has(op, 'itemId') && !state.items.some((i) => i.id === op.itemId)) return "I couldn't find the item to link that to, so nothing changed.";
+  return null;
+}
+
+// "13:30" -> "1:30pm"
+export function fmtTime(v) {
+  if (!hhmm(v)) return '';
+  const [h, m] = v.split(':').map(Number);
+  return `${h % 12 || 12}${m ? `:${String(m).padStart(2, '0')}` : ''}${h < 12 ? 'am' : 'pm'}`;
 }
 
 // Checks every op and applies them all, or none. Returns
@@ -611,6 +697,82 @@ export function applyTextOps(state, ops) {
       if (op.kind === 'addItem') parts.push(`Added '${it.name}' (${bits.join(', ')})`);
       else if (!bits.length) return fail(`I found '${it.name}' but not what to change.`);
       else parts.push(`${status ? 'Marked' : 'Updated'} '${it.name}' ${bits.join(', ')}`);
+      continue;
+    }
+
+    if (op.kind === 'addAppointment' || op.kind === 'updateAppointment') {
+      for (const k of ['start', 'end']) {
+        if (has(op, k) && !hhmm(op[k])) return fail(`"${op[k]}" isn't a time I can use (HH:MM).`);
+      }
+      if (has(op, 'date')) { const e = checkDate(op.date, 'The appointment date'); if (e) return fail(e); }
+      let status = null;
+      if (has(op, 'status')) {
+        status = pickEnum(APPOINTMENT_STATUSES, op.status);
+        if (!status) return fail(`"${op.status}" isn't an appointment status.`);
+      }
+      const linkErr = checkLinks(next, op);
+      if (linkErr) return fail(linkErr);
+      next.appointments = next.appointments || [];
+      const when = (a) => `${shortDate(a.date)}${a.start ? ` ${fmtTime(a.start)}${a.end ? `-${fmtTime(a.end)}` : ''}` : ''}`;
+
+      if (op.kind === 'addAppointment') {
+        const title = String(op.title || '').trim();
+        if (!title) return fail('A new appointment needs a title.');
+        if (!has(op, 'date')) return fail(`What day is '${title}'?`);
+        if (next.appointments.some((a) => sameName(a.title, title) && a.date === op.date)) return fail(`'${title}' on ${shortDate(op.date)} is already on the list.`);
+        const a = createAppointment({ ...pickFields(op, APPT_FIELDS), title, status: status || 'Scheduled', source: op.source });
+        next.appointments.push(a);
+        parts.push(`Added appointment '${a.title}' ${when(a)}${a.who ? ` with ${a.who}` : ''}`);
+      } else {
+        const a = next.appointments.find((x) => x.id === op.appointmentId);
+        if (!a) return fail("I couldn't tell which appointment you meant, so nothing changed.");
+        const set = pickFields(op, APPT_FIELDS);
+        if (status) set.status = status;
+        if (!Object.keys(set).length) return fail(`I found '${a.title}' but not what to change.`);
+        Object.assign(a, set);
+        parts.push(`${status === 'Canceled' ? 'Canceled' : 'Updated'} appointment '${a.title}' ${when(a)}`);
+      }
+      continue;
+    }
+
+    if (op.kind === 'addDocument') {
+      const title = String(op.title || '').trim();
+      if (!title) return fail('A document needs a title.');
+      for (const [k, label] of [['date', 'The document date'], ['expires', 'The expiry date']]) {
+        if (has(op, k)) { const e = checkDate(op[k], label); if (e) return fail(e); }
+      }
+      const kind = has(op, 'docKind') ? pickEnum(DOC_KINDS, op.docKind) : 'Other';
+      if (!kind) return fail(`"${op.docKind}" isn't a document kind. Use ${DOC_KINDS.join(', ')}.`);
+      const amount = has(op, 'amount') ? num(op.amount, null) : null;
+      if (has(op, 'amount') && amount == null) return fail(`"${op.amount}" isn't an amount.`);
+      const linkErr = checkLinks(next, op);
+      if (linkErr) return fail(linkErr);
+      next.documents = next.documents || [];
+      const d = createDocument({ ...pickFields(op, DOC_FIELDS), title, kind, amount, source: op.source, addedAt: op.addedAt });
+      next.documents.push(d);
+      const on = d.itemId ? next.items.find((x) => x.id === d.itemId).name : d.taskId ? next.tasks.find((x) => x.id === d.taskId).title : '';
+      const bits = [d.kind, d.vendor, d.amount != null ? formatMoney(d.amount, { cents: d.amount % 1 !== 0 }) : '',
+        d.expires ? `expires ${shortDate(d.expires)}` : '', d.files.length ? `${d.files.length} file${d.files.length === 1 ? '' : 's'}` : '',
+        on ? `linked to '${on}'` : ''].filter(Boolean);
+      parts.push(`Filed '${d.title}' (${bits.join(', ')})`);
+      continue;
+    }
+
+    if (op.kind === 'addContact') {
+      const name = String(op.name || '').trim();
+      const role = String(op.role || '').trim();
+      if (!name && !role) return fail('A contact needs a name or role.');
+      next.homeInfo = next.homeInfo || {};
+      const list = (next.homeInfo.contacts = next.homeInfo.contacts || []);
+      const existing = list.find((c) => (name && c.name && sameName(c.name, name)) || (!c.name && role && c.role && sameName(c.role, role)));
+      if (existing) {
+        // Fill blanks only, so your own edits win.
+        for (const k of ['role', 'name', 'phone', 'email']) if (!existing[k] && has(op, k)) existing[k] = String(op[k]).trim();
+        parts.push(`Updated contact ${existing.name || existing.role}`);
+      } else {
+        list.push({ role, name, phone: String(op.phone || '').trim(), email: String(op.email || '').trim() });
+        parts.push(`Added contact ${name || role}${role && name ? ` (${role})` : ''}`);
+      }
       continue;
     }
 

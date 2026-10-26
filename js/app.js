@@ -17,6 +17,7 @@ const ui = Object.assign({
   shopFilters: { q: '', room: '', category: '', status: '', priority: '' },
   sort: { key: 'room', dir: 1 },
   shopHideGot: false,
+  docKind: '',
 }, readUi());
 const openTasks = new Set();
 let lastDeleted = null;
@@ -170,7 +171,7 @@ function togglePurchased(item, purchasedStatus = 'Ordered') {
 
 // ---------- Router ----------
 
-const ROUTES = { dashboard: viewDashboard, tasks: viewTasks, shopping: viewShopping, home: viewHome, settings: viewSettings };
+const ROUTES = { dashboard: viewDashboard, tasks: viewTasks, shopping: viewShopping, home: viewHome, files: viewFiles, settings: viewSettings };
 const route = () => (location.hash.slice(1) in ROUTES ? location.hash.slice(1) : 'dashboard');
 
 function renderView() {
@@ -262,7 +263,109 @@ function viewDashboard() {
       ${soon.length ? `<div class="section-label">Arriving soon</div><ul class="donext">${soon.map((i) => `
         <li><div class="title">${esc(i.name)}<small>${esc(i.room)} · ${esc(i.status)}</small></div><span class="pill">${fmtDate(i.expectedDelivery)}</span></li>`).join('')}</ul>` : ''}
     </section>
+
+    <section class="card span-7">
+      <div class="card-head"><h2>Coming up</h2><a href="#files" class="small">All appointments</a></div>
+      ${upcoming().length ? `<ul class="donext">${upcoming().slice(0, 5).map(apptLi).join('')}</ul>`
+    : empty('📅', 'No appointments yet.', 'Forward booking emails to house@darr.solutions and they show up here.')}
+    </section>
+
+    <section class="card span-5">
+      <div class="card-head"><h2>Warranties and papers</h2><a href="#files" class="small">All files</a></div>
+      ${warranties().length ? `<ul class="donext">${warranties().slice(0, 4).map((d) => `
+        <li><div class="title">${esc(d.title)}<small>${esc(d.vendor || d.kind)}</small></div>${expiryPill(d)}</li>`).join('')}</ul>`
+    : `<p class="muted small">${state.documents.length} filed. Forward estimates, warranties and notices to house@darr.solutions.</p>`}
+    </section>
   </div>`;
+}
+
+// ---------- Files and appointments ----------
+
+const linkedName = (x) => (x.itemId ? (state.items.find((i) => i.id === x.itemId) || {}).name
+  : x.taskId ? (state.tasks.find((t) => t.id === x.taskId) || {}).title : '') || '';
+const upcoming = () => state.appointments
+  .filter((a) => a.status === 'Scheduled' && (M.daysUntil(a.date) ?? 0) >= 0)
+  .sort((a, b) => `${a.date} ${a.start}`.localeCompare(`${b.date} ${b.start}`));
+const warranties = () => state.documents.filter((d) => d.expires)
+  .sort((a, b) => a.expires.localeCompare(b.expires));
+const timeRange = (a) => (a.start ? `${M.fmtTime(a.start)}${a.end ? `-${M.fmtTime(a.end)}` : ''}` : 'Any time');
+
+function expiryPill(d) {
+  if (!d.expires) return '';
+  const days = M.daysUntil(d.expires);
+  const cls = days < 0 ? 'high' : days <= 60 ? 'medium' : 'ok';
+  return `<span class="pill ${cls}">${days < 0 ? 'Expired' : 'Until'} ${fmtDate(d.expires)}</span>`;
+}
+
+function apptLi(a) {
+  const days = M.daysUntil(a.date);
+  const on = linkedName(a);
+  return `<li class="${a.status !== 'Scheduled' ? 'muted' : ''}">
+    <div class="title">${esc(a.title)}<small>${esc([timeRange(a), a.who, a.phone, on && `for ${on}`].filter(Boolean).join(' · '))}</small></div>
+    <span class="pill ${days === 0 ? 'medium' : ''}">${a.status === 'Scheduled' ? (days === 0 ? 'Today' : fmtDate(a.date)) : esc(a.status)}</span>
+  </li>`;
+}
+
+function fileLinks(d) {
+  return d.files.map((f) => {
+    const url = safeUrl(f.webUrl);
+    return url ? `<a href="${esc(url)}" target="_blank" rel="noopener" title="${esc(f.path)}">${esc(f.name)} ↗</a>` : `<span>${esc(f.name)}</span>`;
+  }).join(' ');
+}
+
+// Docs and appointments linked to one task or item, for the task row and item editor.
+function linkedPapers(key, id) {
+  const docs = state.documents.filter((d) => d[key] === id);
+  const appts = state.appointments.filter((a) => a[key] === id);
+  if (!docs.length && !appts.length) return '';
+  return `<div class="kv papers">
+    ${appts.map((a) => `<span><b>${esc(a.title)}:</b> ${fmtDate(a.date)} ${esc(timeRange(a))}${a.status !== 'Scheduled' ? ` (${esc(a.status)})` : ''}</span>`).join('')}
+    ${docs.map((d) => `<span><b>${esc(d.kind)}:</b> ${esc(d.title)}${d.amount != null ? `, ${money(d.amount)}` : ''} ${fileLinks(d)}</span>`).join('')}
+  </div>`;
+}
+
+function viewFiles() {
+  const kinds = M.DOC_KINDS.filter((k) => state.documents.some((d) => d.kind === k));
+  const docs = state.documents.filter((d) => !ui.docKind || d.kind === ui.docKind)
+    .sort((a, b) => (b.date || b.addedAt || '').localeCompare(a.date || a.addedAt || ''));
+  const up = upcoming();
+  const past = state.appointments.filter((a) => !up.includes(a)).sort((a, b) => b.date.localeCompare(a.date));
+  return `
+  <div class="page-head"><div><h1>Files and appointments</h1>
+    <p>Forward any house email (estimates, warranties, notices, bookings) to <a href="mailto:house@darr.solutions">house@darr.solutions</a>. Files are saved to your 2608-Montrose-Blvd OneDrive folder.</p></div></div>
+  <div class="grid">
+    <section class="card span-12">
+      <div class="card-head"><h2>Appointments</h2></div>
+      ${up.length || past.length ? `<ul class="donext">${up.map((a) => apptRow(a)).join('')}</ul>
+        ${past.length ? `<details class="past"><summary class="small muted">Past and canceled (${past.length})</summary><ul class="donext">${past.map((a) => apptRow(a)).join('')}</ul></details>` : ''}`
+    : empty('📅', 'Nothing booked yet.', 'Forward a confirmation email and it lands here with the time, who is coming and their number.')}
+    </section>
+
+    <section class="card span-12">
+      <div class="card-head"><h2>Documents</h2>
+        ${kinds.length > 1 ? `<div class="segmented"><button class="${ui.docKind ? '' : 'on'}" data-act="doc-kind" data-v="">All</button>${kinds.map((k) => `<button class="${ui.docKind === k ? 'on' : ''}" data-act="doc-kind" data-v="${esc(k)}">${esc(k)}</button>`).join('')}</div>` : ''}
+      </div>
+      ${docs.length ? `<ul class="donext">${docs.map((d) => {
+    const on = linkedName(d);
+    return `<li class="doc-row">
+          <div class="title">${esc(d.title)}
+            <small>${esc([d.kind, d.vendor, d.date && fmtDate(d.date), on && `for ${on}`].filter(Boolean).join(' · '))}</small>
+            ${d.summary ? `<p class="doc-summary">${esc(d.summary)}</p>` : ''}
+            ${d.files.length ? `<div class="doc-files">${fileLinks(d)}</div>` : ''}
+          </div>
+          ${d.amount != null ? `<strong>${money(d.amount)}</strong>` : ''}${expiryPill(d)}
+          <button class="icon-btn" data-act="delete-doc" data-id="${d.id}" title="Remove from the list (the file stays in OneDrive)">${ICON.x}</button>
+        </li>`;
+  }).join('')}</ul>`
+    : empty('🗂️', ui.docKind ? `No ${ui.docKind.toLowerCase()} documents.` : 'No documents yet.', 'Forward an estimate or warranty email to house@darr.solutions to file it.')}
+    </section>
+  </div>`;
+}
+
+function apptRow(a) {
+  return apptLi(a).replace('</li>', `
+    ${a.status === 'Scheduled' ? `<button class="btn sm" data-act="appt-done" data-id="${a.id}">Done</button>` : ''}
+    <button class="icon-btn" data-act="delete-appt" data-id="${a.id}" title="Delete">${ICON.x}</button></li>`);
 }
 
 function empty(icon, title, body) {
@@ -358,6 +461,7 @@ function taskRow(t, draggable) {
         ${link ? `<span><a href="${esc(link)}" target="_blank" rel="noopener">${esc(hostOf(link))} ↗</a></span>` : ''}
         ${t.due ? `<span><b>Due:</b> ${fmtDate(t.due)}</span>` : ''}
       </div>
+      ${linkedPapers('taskId', t.id)}
     </div>
   </li>`;
 }
@@ -641,6 +745,7 @@ function renderItemModal() {
     <div id="fit" style="margin-top:10px">${fitHtml()}</div>
 
     <label class="field full" style="margin-top:14px">Notes<textarea data-f="notes">${esc(d.notes)}</textarea></label>
+    ${d._isNew || !linkedPapers('itemId', d.id) ? '' : `<div class="section-label">Files and appointments</div>${linkedPapers('itemId', d.id)}`}
     <div class="modal-actions">
       ${d._isNew ? '' : `<button type="button" class="btn ghost" data-act="delete-item" data-id="${d.id}" style="color:var(--danger)">Delete</button>`}
       <div class="right"><button type="button" class="btn ghost" data-act="close-modal">Cancel</button><button class="btn primary">Save</button></div>
@@ -811,6 +916,22 @@ document.addEventListener('click', async (e) => {
     case 'task-view': ui.taskView = el.dataset.v; saveUi(); renderView(); break;
     case 'clear-task-filters': ui.taskFilters = { q: '', cat: '', status: '', priority: '', hideDone: false }; saveUi(); renderView(); break;
     case 'shop-view': ui.shopView = el.dataset.v; saveUi(); renderView(); break;
+    case 'doc-kind': ui.docKind = el.dataset.v; saveUi(); renderView(); break;
+    case 'appt-done': commit((s) => { s.appointments.find((a) => a.id === id).status = 'Done'; }); break;
+    case 'delete-appt': {
+      const a = state.appointments.find((x) => x.id === id);
+      if (await confirmAction('Delete this appointment?', `"${a.title}" on ${fmtDate(a.date)} will be removed.`, 'Delete')) {
+        commit((s) => { s.appointments = s.appointments.filter((x) => x.id !== id); });
+      }
+      break;
+    }
+    case 'delete-doc': {
+      const d = state.documents.find((x) => x.id === id);
+      if (await confirmAction('Remove this document?', `"${d.title}" leaves the list. Any saved file stays in your OneDrive folder.`, 'Remove')) {
+        commit((s) => { s.documents = s.documents.filter((x) => x.id !== id); });
+      }
+      break;
+    }
     case 'clear-shop-filters': ui.shopFilters = { q: '', room: '', category: '', status: '', priority: '' }; saveUi(); renderView(); break;
     case 'sort':
       ui.sort = { key: el.dataset.k, dir: ui.sort.key === el.dataset.k ? -ui.sort.dir : 1 };

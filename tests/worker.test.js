@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import seed from '../js/seed-data.js';
 import { buildStateFromSeed } from '../js/model.js';
-import { handle, parserPrompt, houstonToday, toModelOps, OPS_SCHEMA } from '../worker/src/house.js';
+import { handle, processMessage, parserPrompt, houstonToday, toModelOps, OPS_SCHEMA } from '../worker/src/house.js';
 
 const env = {
   HOUSE_TOKEN: 'tok-123', FIREBASE_PROJECT_ID: 'p', FIREBASE_API_KEY: 'k',
@@ -171,7 +171,18 @@ test('parser ops map onto model ops, dates going to the right field', () => {
     { kind: 'setDates', moveInDate: '2026-11-21' },
     { kind: 'wipe' },
   ]);
-  assert.ok(Object.keys(OPS_SCHEMA.properties.ops.items.properties).length <= 15);
+  assert.deepEqual(toModelOps([
+    { kind: 'addAppointment', name: 'Xfinity install', date: '2026-11-21', start: '08:00' },
+    { kind: 'updateAppointment', id: 'a1', status: 'Canceled' },
+    { kind: 'addDocument', name: 'HVAC estimate', docKind: 'Estimate', amount: 14200 },
+    { kind: 'addContact', name: 'Bayou Plumbing', role: 'Plumber' },
+  ]), [
+    { kind: 'addAppointment', title: 'Xfinity install', date: '2026-11-21', start: '08:00' },
+    { kind: 'updateAppointment', appointmentId: 'a1', date: undefined, status: 'Canceled' },
+    { kind: 'addDocument', title: 'HVAC estimate', date: undefined, docKind: 'Estimate', amount: 14200 },
+    { kind: 'addContact', name: 'Bayou Plumbing', role: 'Plumber' },
+  ]);
+  assert.ok(OPS_SCHEMA.properties.ops.items.properties.saveFiles);
 });
 
 test('email: only allowed, authenticated senders, and the command comes from the body or subject', async () => {
@@ -188,4 +199,123 @@ test('email: only allowed, authenticated senders, and the command comes from the
   assert.equal(replySubject('ordered the TV'), 'Re: ordered the TV');
   assert.equal(replySubject('Re: ordered the TV'), 'Re: ordered the TV');
   assert.equal(replySubject(''), 'House update');
+});
+
+// ---------- Forwarded emails with files ----------
+
+function fakeDrive() {
+  const drive = { files: new Map(), removed: [], n: 0 };
+  drive.upload = async (folder, name, bytes) => {
+    drive.n += 1;
+    const f = { name, path: `${folder}/${name}`, webUrl: `https://onedrive.live.com/${drive.n}`, driveId: `id${drive.n}`, size: bytes.byteLength };
+    drive.files.set(f.driveId, f);
+    return f;
+  };
+  drive.remove = async (ids) => { for (const id of ids) { drive.files.delete(id); drive.removed.push(id); } };
+  return drive;
+}
+
+const pdf = new Uint8Array([37, 80, 68, 70]).buffer;
+const forward = (attachments = [{ filename: 'Quote 4471.pdf', mimeType: 'application/pdf', size: 4, content: pdf }]) => ({
+  attachments, raw: new Uint8Array([1, 2, 3]).buffer, folders: ['03 HOA', '04 Quotes and Estimates', '07 Renovation and Contractors'],
+});
+
+test('a forwarded estimate saves its PDF, files a document, and undo removes both', async () => {
+  const s = start();
+  const db = fakeFirestore(s);
+  const drive = fakeDrive();
+  const hvac = s.tasks.find((t) => t.title === 'Plan the HVAC replacement');
+  let seenMail = null;
+  const deps = {
+    fetch: db.fetch, now: () => 5000, files: drive,
+    parse: async (state, msg, mail) => {
+      seenMail = mail;
+      return { question: '', ops: [
+        { kind: 'addDocument', name: 'HVAC replacement estimate', docKind: 'Estimate', vendor: 'Autumn Mechanical', amount: 14200, date: '2026-10-30', taskId: hvac.id,
+          saveFiles: [{ attachment: 0, folder: '04 Quotes and Estimates', name: '2026-10-30 Autumn Mechanical - HVAC estimate' }, { attachment: 7, folder: 'x', name: 'y' }] },
+        { kind: 'addAppointment', name: 'HVAC install', date: '2026-11-24', start: '08:00', end: '12:00', who: 'Autumn Mechanical' },
+      ] };
+    },
+  };
+  const res = await processMessage('FW: Your estimate', env, deps, forward());
+  assert.equal(res.text, "Filed 'HVAC replacement estimate' (Estimate, Autumn Mechanical, $14,200, 1 file, linked to 'Plan the HVAC replacement'); Added appointment 'HVAC install' Nov 24 8am-12pm with Autumn Mechanical.");
+  assert.equal(seenMail.attachments.length, 1);
+  assert.deepEqual(res.files.map((f) => f.path), ['04 Quotes and Estimates/2026-10-30 Autumn Mechanical - HVAC estimate.pdf']);
+  const saved = db.payload();
+  assert.equal(saved.documents[0].files[0].driveId, 'id1');
+  assert.equal(saved.documents[0].source, 'email');
+  assert.equal(saved.appointments[0].who, 'Autumn Mechanical');
+
+  const undone = await processMessage('undo', env, { ...deps, now: () => 6000 });
+  assert.match(undone.text, /Moved 1 saved file to the OneDrive recycle bin/);
+  assert.deepEqual(drive.removed, ['id1']);
+  assert.deepEqual(db.payload().documents, []);
+});
+
+test('a forward whose ops are rejected uploads nothing; a bad folder lands in 00 Inbox', async () => {
+  const db = fakeFirestore(start());
+  const drive = fakeDrive();
+  const bad = { fetch: db.fetch, now: () => 5000, files: drive, parse: async () => ({ question: '', ops: [
+    { kind: 'addDocument', name: 'x', docKind: 'Brochure', saveFiles: [{ attachment: 0, folder: '04 Quotes and Estimates', name: 'x' }] }] }) };
+  assert.match((await processMessage('fwd', env, bad, forward())).text, /isn't a document kind/);
+  assert.equal(drive.n, 0);
+
+  const sneaky = { ...bad, parse: async () => ({ question: '', ops: [
+    { kind: 'addDocument', name: 'Email notice', docKind: 'Notice', saveFiles: [{ attachment: -1, folder: '../../Documents', name: 'HOA notice' }] }] }) };
+  const res = await processMessage('fwd', env, sneaky, forward([]));
+  assert.deepEqual(res.files.map((f) => f.path), ['00 Inbox/HOA notice.eml']);
+});
+
+test('if saving the list fails after uploading, the uploaded files are removed', async () => {
+  const s = start();
+  const db = fakeFirestore(s);
+  const drive = fakeDrive();
+  const deps = {
+    now: () => 5000, files: drive,
+    parse: async () => ({ question: '', ops: [{ kind: 'addDocument', name: 'Warranty', docKind: 'Warranty', saveFiles: [{ attachment: 0, folder: '04 Quotes and Estimates', name: 'w' }] }] }),
+    fetch: async (url, init) => (init && init.method === 'PATCH' ? new Response('{}', { status: 500 }) : db.fetch(url, init)),
+  };
+  const res = await processMessage('fwd', env, deps, forward());
+  assert.equal(res.status, 500);
+  assert.deepEqual(drive.removed, ['id1']);
+});
+
+test('OneDrive names: unsafe characters, extensions, and folders outside the house folder', async () => {
+  const { safeName, safeFolder, fileNameFor } = await import('../worker/src/onedrive.js');
+  const tops = ['03 HOA', '04 Quotes and Estimates', '07 Renovation and Contractors'];
+  assert.equal(safeName('a/b:c*?"<>|#%d'), 'a-b-c-d');
+  assert.equal(safeFolder('07 Renovation and Contractors/Autumn Mechanical', tops), '07 Renovation and Contractors/Autumn Mechanical');
+  assert.equal(safeFolder('08 Warranties and Receipts', tops), '08 Warranties and Receipts');
+  assert.equal(safeFolder('../../etc', tops), '00 Inbox');
+  assert.equal(safeFolder('Random', tops), '00 Inbox');
+  assert.equal(safeFolder('', tops), '00 Inbox');
+  assert.equal(fileNameFor('2026-10-30 Autumn - estimate', 'Quote 4471.PDF'), '2026-10-30 Autumn - estimate.PDF');
+  assert.equal(fileNameFor('Warranty.pdf', 'scan.pdf'), 'Warranty.pdf');
+  assert.equal(fileNameFor('', 'scan.pdf'), 'scan.pdf');
+});
+
+test('email: forwards and attachments file; replies to us stay short commands', async () => {
+  const { isFiling, realAttachments, forwardText, noteAbove } = await import('../worker/src/email.js');
+  assert.equal(isFiling({ subject: 'FW: Your appointment', text: 'see below', attachments: [] }), true);
+  assert.equal(isFiling({ subject: 'Quote', text: 'here', attachments: [{}] }), true);
+  assert.equal(isFiling({ subject: 'x', text: '---------- Forwarded message ---------\nFrom: a@b.com', attachments: [] }), true);
+  assert.equal(isFiling({ subject: 'Re: House update', text: 'undo\n\nFrom: 2608 House <house@darr.solutions>\nSent: Monday', attachments: [] }), false);
+  assert.equal(isFiling({ subject: 'Re: the rug arrived', text: `the living room one\n\nFrom: 2608 House\n${'x'.repeat(900)}`, attachments: [] }), false);
+  assert.equal(isFiling({ subject: 'ordered the TV', text: '', attachments: [] }), false);
+
+  const big = new ArrayBuffer(200 * 1024);
+  const small = new ArrayBuffer(3000);
+  const kept = realAttachments([
+    { filename: 'image001.png', mimeType: 'image/png', contentId: '<x>', disposition: 'inline', content: small },
+    { filename: 'photo.jpg', mimeType: 'image/jpeg', disposition: 'attachment', content: small },
+    { filename: 'estimate.pdf', mimeType: 'application/pdf', content: big },
+    { filename: 'empty.txt', mimeType: 'text/plain', content: new ArrayBuffer(0) },
+  ]).map((a) => a.filename);
+  assert.deepEqual(kept, ['photo.jpg', 'estimate.pdf']);
+
+  assert.equal(noteAbove('file under HVAC\n\n---------- Forwarded message ---------\nFrom: Autumn'), 'file under HVAC');
+  assert.equal(noteAbove('\n---------- Forwarded message ---------\nFrom: Autumn'), '');
+  const t = forwardText({ note: 'file under HVAC', from: 'jackson@leggettcp.com', subject: 'FW: Estimate', date: 'Mon', text: 'body', calendars: ['BEGIN:VCALENDAR'] });
+  assert.ok(t.startsWith("Jackson's note: file under HVAC"));
+  assert.ok(t.includes('Subject: FW: Estimate') && t.includes('Calendar invite:\nBEGIN:VCALENDAR'));
 });
