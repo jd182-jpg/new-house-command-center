@@ -1,7 +1,11 @@
-// Cloudflare Worker: POST a plain-English update, get a one-line confirmation back.
-// Secrets (set with `npx wrangler secret put`): HOUSE_TOKEN, ANTHROPIC_API_KEY.
+// Cloudflare Worker: a plain-English update in (POST or email), a one-line confirmation out.
+// Secrets (set with `npx wrangler secret put`): HOUSE_TOKEN, ANTHROPIC_API_KEY, ALLOWED_SENDERS.
 import Anthropic from '@anthropic-ai/sdk';
-import { handle, parserPrompt, OPS_SCHEMA, SYSTEM_PROMPT } from './house.js';
+import PostalMime from 'postal-mime';
+import { createMimeMessage } from 'mimetext';
+import { EmailMessage } from 'cloudflare:email';
+import { handle, processMessage, parserPrompt, OPS_SCHEMA, SYSTEM_PROMPT } from './house.js';
+import { allowedSenders, authPassed, extractCommand, replySubject } from './email.js';
 
 const MODEL = 'claude-haiku-5-5';
 
@@ -26,12 +30,45 @@ async function parseWithClaude(env, state, message) {
   return { question: text || "I couldn't tell what to change, so nothing changed.", ops: [] };
 }
 
+const depsFor = (env) => ({
+  fetch: (...args) => fetch(...args),
+  parse: (state, message) => parseWithClaude(env, state, message),
+  now: () => Date.now(),
+});
+
 export default {
   fetch(request, env) {
-    return handle(request, env, {
-      fetch: (...args) => fetch(...args),
-      parse: (state, message) => parseWithClaude(env, state, message),
-      now: () => Date.now(),
-    });
+    return handle(request, env, depsFor(env));
+  },
+
+  async email(message, env) {
+    const from = String(message.from || '').toLowerCase();
+    if (!allowedSenders(env.ALLOWED_SENDERS).includes(from)) {
+      console.log(`email from ${from}: not an allowed sender, dropped`);
+      message.setReject('Unknown sender');
+      return;
+    }
+    if (!authPassed(message.headers.get('authentication-results'))) {
+      console.log(`email from ${from}: failed SPF and DKIM, dropped`);
+      message.setReject('Sender authentication failed');
+      return;
+    }
+
+    const mail = await PostalMime.parse(message.raw);
+    const text = mail.text || String(mail.html || '').replace(/<(br|\/p|\/div)[^>]*>/gi, '\n').replace(/<[^>]+>/g, '');
+    const command = extractCommand({ subject: mail.subject, text });
+    const { text: answer } = await processMessage(command, env, depsFor(env));
+    console.log(`email from ${from}: "${command}" -> ${answer}`);
+
+    const out = createMimeMessage();
+    out.setSender({ name: '2608 House', addr: message.to });
+    out.setRecipient(message.from);
+    out.setSubject(replySubject(mail.subject));
+    if (mail.messageId) {
+      out.setHeader('In-Reply-To', mail.messageId);
+      out.setHeader('References', mail.messageId);
+    }
+    out.addMessage({ contentType: 'text/plain', data: `${answer}\n\nYou wrote: ${command}\n\nReply "undo" to take it back.` });
+    await message.reply(new EmailMessage(message.to, message.from, out.asRaw()));
   },
 };

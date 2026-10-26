@@ -173,3 +173,19 @@ test('parser ops map onto model ops, dates going to the right field', () => {
   ]);
   assert.ok(Object.keys(OPS_SCHEMA.properties.ops.items.properties).length <= 15);
 });
+
+test('email: only allowed, authenticated senders, and the command comes from the body or subject', async () => {
+  const { allowedSenders, authPassed, extractCommand, replySubject } = await import('../worker/src/email.js');
+  assert.deepEqual(allowedSenders(' A@Outlook.com, b@icloud.com ,'), ['a@outlook.com', 'b@icloud.com']);
+  assert.equal(authPassed('mx.cloudflare.net; dkim=pass header.d=outlook.com; spf=pass'), true);
+  assert.equal(authPassed('mx.cloudflare.net; dkim=fail; spf=softfail'), false);
+  assert.equal(authPassed(null), false);
+
+  assert.equal(extractCommand({ subject: 'ordered the Frame TV', text: '' }), 'ordered the Frame TV');
+  assert.equal(extractCommand({ subject: 'Re: House update', text: 'undo\n\nOn Mon, Oct 26, 2026, 2608 House wrote:\n> Marked it' }), 'undo');
+  assert.equal(extractCommand({ subject: '', text: 'done: called CenterPoint\nconfirmation 4471\n\nSent from my iPhone' }), 'done: called CenterPoint confirmation 4471');
+  assert.equal(extractCommand({ subject: 'Fwd: x', text: '-- \nJackson' }), 'x');
+  assert.equal(replySubject('ordered the TV'), 'Re: ordered the TV');
+  assert.equal(replySubject('Re: ordered the TV'), 'Re: ordered the TV');
+  assert.equal(replySubject(''), 'House update');
+});

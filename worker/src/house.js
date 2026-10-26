@@ -163,30 +163,38 @@ export async function handle(request, env, deps) {
   const token = auth.replace(/^bearer\s+/i, '').trim();
   if (!env.HOUSE_TOKEN || !safeEqual(token, env.HOUSE_TOKEN)) return reply("Not allowed: the token doesn't match.", 401);
 
-  if (!message) return reply('Say what changed, like "ordered the Frame TV from Best Buy, $1,999".');
-  if (message.length > MAX_MESSAGE) return reply('That message is too long. Keep it to a sentence or two.');
+  const { status, text } = await processMessage(message, env, deps);
+  return reply(text, status);
+}
+
+// The shared core for the web endpoint and email: one message in, one line of reply out.
+// Callers check who is asking first.
+export async function processMessage(message, env, deps) {
+  const say = (text, status = 200) => ({ status, text });
+  if (!message) return say('Say what changed, like "ordered the Frame TV from Best Buy, $1,999".');
+  if (message.length > MAX_MESSAGE) return say('That message is too long. Keep it to a sentence or two.');
 
   try {
-    if (/^undo[.!]?$/i.test(message)) return reply(await undo(env, deps));
+    if (/^undo[.!]?$/i.test(message)) return say(await undo(env, deps));
 
     let doc = await readDoc(env, deps.fetch);
     const parsed = await deps.parse(normalizeState(doc.payload), message);
-    if (parsed.question) return reply(parsed.question);
-    if (!parsed.ops || !parsed.ops.length) return reply("I couldn't tell what to change, so nothing changed.");
+    if (parsed.question) return say(parsed.question);
+    if (!parsed.ops || !parsed.ops.length) return say("I couldn't tell what to change, so nothing changed.");
 
     // Apply against the freshest copy; if a device wrote in between, re-read and apply again.
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const result = applyTextOps(normalizeState(doc.payload), toModelOps(parsed.ops));
-      if (!result.ok) return reply(result.message);
+      if (!result.ok) return say(result.message);
       const next = stampUpdated(result.state, Math.max(deps.now(), doc.payload.updatedAt + 1));
       const undoInfo = { before: doc.payload, after: next.updatedAt, summary: result.summary };
-      if (await writeDoc(env, deps.fetch, doc.updateTime, next, undoInfo)) return reply(`${result.summary}.`);
+      if (await writeDoc(env, deps.fetch, doc.updateTime, next, undoInfo)) return say(`${result.summary}.`);
       doc = await readDoc(env, deps.fetch);
     }
-    return reply('The list kept changing while I saved. Try again in a moment.');
+    return say('The list kept changing while I saved. Try again in a moment.');
   } catch (err) {
     console.error(err);
-    return reply(`Something went wrong, nothing changed. (${err.message})`, 500);
+    return say(`Something went wrong, nothing changed. (${err.message})`, 500);
   }
 }
 
