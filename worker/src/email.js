@@ -68,3 +68,17 @@ export function forwardText({ note, from, subject, date, text, calendars }) {
   for (const c of calendars || []) parts.push(`Calendar invite:\n${c}`);
   return parts.join('\n\n');
 }
+
+// The free Workers plan allows about 10 ms of CPU per email, and unpacking attachments is
+// the expensive part. Bigger emails are saved whole to OneDrive instead of being read.
+export const MAX_PARSE_BYTES = 200 * 1024;
+
+const size = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`);
+
+export function tooBigText(bytes, savedPath) {
+  return [
+    `This email is ${size(bytes)}, too big for me to read (my limit is ${size(MAX_PARSE_BYTES)}, so most PDFs and photos are too much).`,
+    savedPath ? `I saved the whole email, attachments included, to 2608-Montrose-Blvd/${savedPath}.` : "I couldn't save a copy to OneDrive either.",
+    'To have it filed in the app, forward it again without the attachments, or paste the important part.',
+  ].join(' ');
+}

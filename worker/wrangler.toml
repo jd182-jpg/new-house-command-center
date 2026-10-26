@@ -20,3 +20,13 @@ MS_CLIENT_ID = "34f93536-4f0c-4751-8baf-19967a8a418c"
 [[kv_namespaces]]
 binding = "KV"
 id = "bb93108ec64b48f1b4ade9a0773d34cb"
+
+# Fallback for replies when Cloudflare refuses reply() (the sender's mail failed DMARC).
+# Only reaches destination addresses verified under Email Routing > Destination addresses.
+[[send_email]]
+name = "MAILER"
+
+# Keeps Worker logs in the Cloudflare dashboard (Workers > house-text > Logs), so a failed
+# email can be looked into afterwards.
+[observability]
+enabled = true

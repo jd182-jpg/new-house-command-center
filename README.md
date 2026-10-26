@@ -151,6 +151,10 @@ The reply lists what was filed and where. Reply **undo** to take it all back, wh
 
 In the app, the **Files** tab lists appointments and documents (with OneDrive links), the dashboard shows **Coming up** and **Warranties and papers**, and a task or item shows its linked papers.
 
+**Size limit (free plan).** Cloudflare's free Workers plan allows about 10 ms of processing per email, and unpacking attachments is the expensive part. So emails up to **200 KB** (plain emails, even with signature logos) are read and filed. Bigger ones (most PDFs and photos) are not read: the whole email, attachments included, is saved as an `.eml` to `00 Inbox`, and the reply tells you to forward it again without the attachments if you want the details filed. Workers Paid ($5 a month) would lift this to 30 seconds and let PDFs be read and filed; raise `MAX_PARSE_BYTES` in `worker/src/email.js` after upgrading.
+
+**Replies to Outlook.com and Rice.** Cloudflare only lets the Worker *reply* to mail that passes DMARC, which Outlook.com mail usually doesn't. The Worker then sends the reply fresh instead, which Cloudflare allows only to addresses verified under **Email > Email Routing > Destination addresses**. Each sender address needs that one-time verification.
+
 **OneDrive connection.** The Worker signs in to your personal Microsoft account (jacksonodarr@outlook.com) through the Azure app registration "House Command Center" (client id in `worker/wrangler.toml`, personal accounts allowed, public client flows on). The refresh token lives in the Worker's KV store (`house-text-kv`, key `ms_refresh_token`) and renews itself on each use. If a reply ever says the OneDrive sign-in expired (about 90 days without use), reconnect:
 
 ```bash

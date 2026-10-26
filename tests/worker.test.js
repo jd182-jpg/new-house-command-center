@@ -319,3 +319,12 @@ test('email: forwards and attachments file; replies to us stay short commands', 
   assert.ok(t.startsWith("Jackson's note: file under HVAC"));
   assert.ok(t.includes('Subject: FW: Estimate') && t.includes('Calendar invite:\nBEGIN:VCALENDAR'));
 });
+
+test('email: too-big emails get a clear reply instead of being read', async () => {
+  const { tooBigText, MAX_PARSE_BYTES } = await import('../worker/src/email.js');
+  assert.equal(MAX_PARSE_BYTES, 200 * 1024);
+  const t = tooBigText(2.4 * 1048576, '00 Inbox/2026-10-26 Hot Water Guys - Job scheduled.eml');
+  assert.match(t, /^This email is 2\.4 MB, too big for me to read \(my limit is 200 KB/);
+  assert.match(t, /saved the whole email, attachments included, to 2608-Montrose-Blvd\/00 Inbox\/2026-10-26 Hot Water Guys/);
+  assert.match(tooBigText(300 * 1024, null), /couldn't save a copy/);
+});

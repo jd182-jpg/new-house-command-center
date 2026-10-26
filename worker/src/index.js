@@ -2,12 +2,12 @@
 // Secrets (set with `npx wrangler secret put`): HOUSE_TOKEN, ANTHROPIC_API_KEY, ALLOWED_SENDERS.
 // KV holds the OneDrive refresh token (ms_refresh_token) and which forwards were already filed.
 import Anthropic from '@anthropic-ai/sdk';
-import PostalMime from 'postal-mime';
+import PostalMime, { decodeWords } from 'postal-mime';
 import { createMimeMessage } from 'mimetext';
 import { EmailMessage } from 'cloudflare:email';
 import { Buffer } from 'node:buffer';
 import { handle, processMessage, parserPrompt, OPS_SCHEMA, SYSTEM_PROMPT } from './house.js';
-import { allowedSenders, authPassed, extractCommand, replySubject, isFiling, realAttachments, forwardText, noteAbove } from './email.js';
+import { allowedSenders, authPassed, extractCommand, replySubject, isFiling, realAttachments, forwardText, noteAbove, MAX_PARSE_BYTES, tooBigText } from './email.js';
 import * as drive from './onedrive.js';
 
 // Short texts use the fast model; forwarded emails (long, messy, with PDFs) use a stronger one.
@@ -82,6 +82,10 @@ export default {
     }
 
     const raw = await new Response(message.raw).arrayBuffer();
+    if (raw.byteLength > MAX_PARSE_BYTES) {
+      await saveTooBig(message, env, raw, from);
+      return;
+    }
     const mail = await PostalMime.parse(raw);
     const html = String(mail.html || '').replace(/<(br|\/p|\/div|\/tr)[^>]*>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ');
     const text = mail.text || html;
@@ -97,7 +101,7 @@ export default {
       // The same email forwarded twice is filed once.
       const seenKey = mail.messageId ? `seen:${mail.messageId}` : null;
       if (seenKey && (await env.KV.get(seenKey))) {
-        await sendReply(message, mail, 'Already filed this one, so nothing changed.', '(forwarded email)');
+        await sendReply(message, mail, 'Already filed this one, so nothing changed.', '(forwarded email)', [], env);
         return;
       }
       command = forwardText({ note: noteAbove(text), from: mail.from && mail.from.address, subject: mail.subject, date: mail.date, text, calendars });
@@ -109,12 +113,33 @@ export default {
     if (filing && filing.seenKey && changed) await env.KV.put(filing.seenKey, '1', { expirationTtl: 60 * 86400 });
     const shown = filing ? `(forwarded: ${mail.subject || 'no subject'}${attachments.length ? `, ${attachments.length} attachment${attachments.length === 1 ? '' : 's'}` : ''})` : command;
     console.log(`email from ${from}: ${filing ? 'forward' : 'text'} "${shown}" -> ${answer}`);
-    await sendReply(message, mail, answer, shown, files);
+    await sendReply(message, mail, answer, shown, files, env);
   },
 };
 
+// Too big to unpack within the CPU limit: save the raw email to 00 Inbox without parsing it.
+async function saveTooBig(message, env, raw, from) {
+  const subject = decodeWords(message.headers.get('subject') || '');
+  const mail = { subject, messageId: message.headers.get('message-id') };
+  const seenKey = mail.messageId ? `big:${mail.messageId}` : null;
+  let path = seenKey ? await env.KV.get(seenKey) : null;
+  if (!path) {
+    try {
+      const day = new Date().toISOString().slice(0, 10);
+      const saved = await drive.upload(env, fetch, '00 Inbox', drive.fileNameFor(`${day} ${subject.replace(/^((re|fwd?|fw):\s*)+/i, '')}`, 'email.eml'), raw);
+      path = saved.path;
+      if (seenKey) await env.KV.put(seenKey, path, { expirationTtl: 60 * 86400 });
+    } catch (err) {
+      console.error(err);
+    }
+  }
+  const answer = tooBigText(raw.byteLength, path);
+  console.log(`email from ${from}: too big (${raw.byteLength} bytes) "${subject}" -> ${path || 'not saved'}`);
+  await sendReply(message, mail, answer, `(forwarded: ${subject || 'no subject'})`, [], env);
+}
+
 // Replies in the same thread: what changed, any files saved, and how to undo.
-async function sendReply(message, mail, answer, shown, files = []) {
+async function sendReply(message, mail, answer, shown, files = [], env = null) {
   const out = createMimeMessage();
   out.setSender({ name: '2608 House', addr: message.to });
   out.setRecipient(message.from);
@@ -129,5 +154,13 @@ async function sendReply(message, mail, answer, shown, files = []) {
     saved.length ? `\nSaved to OneDrive:\n${saved.join('\n')}` : '',
     `\nYou sent: ${shown}`, '\nReply "undo" to take it back.'].join('\n');
   out.addMessage({ contentType: 'text/plain', data: body });
-  await message.reply(new EmailMessage(message.to, message.from, out.asRaw()));
+  try {
+    await message.reply(new EmailMessage(message.to, message.from, out.asRaw()));
+  } catch (err) {
+    // Cloudflare only allows reply() to mail that passes DMARC (Outlook.com mail often doesn't).
+    // Sending fresh works to any destination address verified in Email Routing.
+    console.log(`reply() refused (${err.message}); sending instead`);
+    if (!env || !env.MAILER) throw err;
+    await env.MAILER.send(new EmailMessage(message.to, message.from, out.asRaw()));
+  }
 }
