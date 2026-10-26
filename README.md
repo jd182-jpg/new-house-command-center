@@ -131,6 +131,36 @@ Send your update to **house@darr.solutions**, in the body or just the subject. A
 - How it's wired: darr.solutions uses Cloudflare nameservers (the domain is still registered at GoDaddy). Cloudflare **Email > Email Routing** has a custom address `house` with the action **Send to a Worker > house-text**. The `email` handler in `worker/src/index.js` reads the message and calls the same `processMessage` as the web endpoint.
 - To change who can send: `npx wrangler secret put ALLOWED_SENDERS` in `worker/`, then paste a comma separated list.
 
+### Forward anything about the house
+
+Forward any house email to **house@darr.solutions**: appointment confirmations, estimates and quotes, invoices and receipts, warranties, HOA or city notices, insurance papers. Add a note on top if you want ("file under HVAC", "this replaces the old quote"); it wins over the filer's own reading.
+
+The Worker reads the whole email plus its PDFs and photos (Claude Sonnet 5.5) and, in one go:
+
+| The email is | It becomes |
+| --- | --- |
+| A booked visit, install, delivery window, meeting | An **appointment** (date, time window, who, phone, confirmation), or a change to one already listed |
+| An estimate, invoice, receipt, warranty, policy, contract, manual, notice | A **document** (kind, vendor, amount, date, expiry, short summary), linked to the related task or item |
+| Something with a deadline | A **task** with that due date, or an update to the existing one |
+| An order or shipping confirmation | An update to the **shopping item** |
+| A new business working on the house | A **contact** in Home Info |
+
+Attachments are saved to your OneDrive **2608-Montrose-Blvd** folder: estimates in `04 Quotes and Estimates`, HOA papers in `03 HOA`, contractor paperwork in `07 Renovation and Contractors/<company>`, closing papers in `01 Contract and Closing`, warranties, manuals and receipts in `08 Warranties and Receipts`, utility accounts in `09 Utilities and Services`, and anything unclear in `00 Inbox`. Files are named `YYYY-MM-DD Vendor - what it is`. If the important part is only in the email body, it saves the email itself as an `.eml`. Signature logos are skipped. A path outside the house folder is impossible: anything that doesn't start with a known folder goes to `00 Inbox`.
+
+The reply lists what was filed and where. Reply **undo** to take it all back, which also moves the saved files to the OneDrive recycle bin. Forwarding the same email twice files it once.
+
+In the app, the **Files** tab lists appointments and documents (with OneDrive links), the dashboard shows **Coming up** and **Warranties and papers**, and a task or item shows its linked papers.
+
+**OneDrive connection.** The Worker signs in to your personal Microsoft account (jacksonodarr@outlook.com) through the Azure app registration "House Command Center" (client id in `worker/wrangler.toml`, personal accounts allowed, public client flows on). The refresh token lives in the Worker's KV store (`house-text-kv`, key `ms_refresh_token`) and renews itself on each use. If a reply ever says the OneDrive sign-in expired (about 90 days without use), reconnect:
+
+```bash
+cd ~/Documents/Projects/new-house-command-center/worker && python3 scripts/connect-onedrive.py
+```
+
+It prints a code to enter at microsoft.com/link. The permission Microsoft grants covers your whole OneDrive; the Worker only ever writes inside `2608-Montrose-Blvd`.
+
+**Cost.** Forwards use Sonnet 5.5, about a cent or two each (more for long PDFs). Short texts still use Haiku 5.5.
+
 **What it can do:** mark a task done or set its status, due date, confirmation number or a note; add a task; add an item; set an item's status, price, quantity, store, link, order number, expected delivery or a note; and change the closing or move-in date.
 
 **Safety rules.**
