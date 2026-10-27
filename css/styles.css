@@ -382,3 +382,12 @@ details.past { margin-top: 10px; }
 .card-head .segmented { max-width: 100%; overflow-x: auto; }
 details.past summary { cursor: pointer; }
 .donext li.muted .title { color: var(--muted); }
+
+/* Password screen */
+#lock { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: var(--bg); }
+.lock-card { width: 100%; max-width: 340px; display: grid; gap: 12px; text-align: center; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 28px 24px; }
+.lock-card h1 { margin: 0; font-family: 'DM Serif Display', serif; font-weight: 400; font-size: 26px; }
+.lock-card p { margin: 0; }
+.lock-card input { font: inherit; font-size: 18px; text-align: center; letter-spacing: 4px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); }
+.lock-mark { width: 44px; height: 44px; margin: 0 auto; border-radius: 12px; background: var(--ink) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M14 34 32 18l18 16v14H38V38H26v10H14z' fill='%23d08a52'/%3E%3C/svg%3E") center/70% no-repeat; }
+.lock-error { color: #b4442c; font-size: 13px; min-height: 1em; }
