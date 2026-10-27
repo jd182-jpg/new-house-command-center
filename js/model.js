@@ -6,7 +6,9 @@ export const TASK_STATUSES = ['To do', 'In progress', 'Waiting', 'Done'];
 export const TASK_PRIORITIES = ['High', 'Medium', 'Low'];
 
 export const ITEM_PRIORITIES = ['Before move-in', 'First week', 'Later'];
-export const ITEM_STATUSES = ['Idea', 'Researching', 'Ordered', 'Shipped', 'Delivered', 'Placed'];
+export const ITEM_STATUSES = ['Suggested', 'To purchase', 'Ordered', 'Shipped', 'Delivered', 'Placed'];
+// Older saves used these names for the first two stages.
+const LEGACY_ITEM_STATUS = { Idea: 'Suggested', Researching: 'To purchase' };
 // Statuses that mean money has left the building.
 export const PURCHASED_STATUSES = ['Ordered', 'Shipped', 'Delivered', 'Placed'];
 export const STAIR_OPTIONS = ['Need to check', 'Yes', 'No'];
@@ -56,6 +58,18 @@ export function createLink(fields = {}) {
   };
 }
 
+const itemStatus = (s) => (ITEM_STATUSES.includes(s) ? s : LEGACY_ITEM_STATUS[s] || null);
+
+// A suggestion becomes a pick once it has a brand or a link: it moves from Suggested to To purchase.
+export const hasPick = (item) => !!(item.brand || '').trim() || item.links.some((l) => (l.url || '').trim());
+
+export function promoteIfPicked(item) {
+  if (item.status !== 'Suggested' || !hasPick(item)) return false;
+  item.prevStatus = item.status;
+  item.status = 'To purchase';
+  return true;
+}
+
 export function createItem(fields = {}) {
   const dims = fields.dims || {};
   return {
@@ -64,10 +78,11 @@ export function createItem(fields = {}) {
     room: fields.room || 'Whole house',
     category: fields.category || 'Other',
     priority: ITEM_PRIORITIES.includes(fields.priority) ? fields.priority : 'First week',
-    status: ITEM_STATUSES.includes(fields.status) ? fields.status : 'Idea',
+    status: itemStatus(fields.status) || 'Suggested',
     qty: Math.max(1, Math.round(num(fields.qty, 1)) || 1),
     unitPrice: fields.unitPrice === '' || fields.unitPrice == null ? null : num(fields.unitPrice, null),
     store: fields.store || '',
+    brand: fields.brand || '',
     // A single legacy `link` becomes the first option in `links`.
     links: Array.isArray(fields.links) && fields.links.length
       ? fields.links.map(createLink)
@@ -84,7 +99,7 @@ export function createItem(fields = {}) {
     notes: fields.notes || '',
     source: fields.source || 'starter',
     // Remembered so un-ticking an item in shopping mode restores where it was.
-    prevStatus: ITEM_STATUSES.includes(fields.prevStatus) ? fields.prevStatus : null,
+    prevStatus: itemStatus(fields.prevStatus),
     order: Number.isFinite(fields.order) ? fields.order : 0,
   };
 }
@@ -181,7 +196,7 @@ export function normalizeState(raw) {
 // They only fill gaps: new tasks are added by id, settings are set only when blank, and
 // edits to existing tasks and items match by title or name (or a task's id) and leave deleted ones alone.
 // update: { id, settings, addTasks, editTasks: [{ title | id, set }], editItems: [{ name, set }],
-//           addContacts, appendNotes }
+//           unboughtItemsTo, addContacts, appendNotes }
 export function pendingUpdates(state, updates = []) {
   const done = new Set(state.appliedUpdates || []);
   return updates.filter((u) => !done.has(u.id));
@@ -203,6 +218,10 @@ export function applySeedUpdates(state, updates = []) {
     for (const { id, title, set } of u.editTasks || []) {
       const t = next.tasks.find((x) => (id ? x.id === id : x.title === title));
       if (t) Object.assign(t, setOrFill(t, set));
+    }
+    // Moves every item not yet bought back to this status (brand and links are kept).
+    if (u.unboughtItemsTo) {
+      for (const it of next.items) if (!PURCHASED_STATUSES.includes(it.status)) it.status = u.unboughtItemsTo;
     }
     for (const { name, set } of u.editItems || []) {
       const it = next.items.find((x) => x.name === name);
@@ -507,8 +526,9 @@ export function formatMoney(n, { cents = false } = {}) {
 // op kinds:
 //   updateTask { taskId, status?, due?, confirmation?, notes? }   notes are appended
 //   addTask    { title, category?, priority?, due?, notes? }
-//   updateItem { itemId, status?, unitPrice?, qty?, store?, url?, orderNumber?, expectedDelivery?, notes? }
-//   addItem    { name, room?, category?, priority?, status?, unitPrice?, qty?, store?, url?, notes? }
+//   updateItem { itemId, status?, brand?, unitPrice?, qty?, store?, url?, orderNumber?, expectedDelivery?, notes? }
+//   addItem    { name, room?, category?, priority?, status?, brand?, unitPrice?, qty?, store?, url?, notes? }
+//   A Suggested item that gets a brand or link moves to To purchase unless a status is given.
 //   setDates   { closingDate?, moveInDate? }
 //   addAppointment    { title, date, start?, end?, who?, phone?, location?, confirmation?, notes?, taskId?, itemId? }
 //   updateAppointment { appointmentId, date?, start?, end?, status?, who?, phone?, location?, confirmation?, notes? }
@@ -556,10 +576,10 @@ export function describeForParser(state) {
     'TASKS (id | status | category | due | title)',
     ...state.tasks.map((t) => `${t.id} | ${t.status} | ${t.category} | ${t.due || '-'} | ${t.title}`),
     '',
-    'ITEMS (id | status | room | price | store | name)',
+    'ITEMS (id | status | room | price | store | brand | name)',
     ...state.items.map((i) => {
       const p = effectiveUnitPrice(i);
-      return `${i.id} | ${i.status} | ${i.room} | ${p == null ? '-' : p} | ${i.store || '-'} | ${i.name}`;
+      return `${i.id} | ${i.status} | ${i.room} | ${p == null ? '-' : p} | ${i.store || '-'} | ${i.brand || '-'} | ${i.name}`;
     }),
   ];
   const appts = state.appointments || [];
@@ -681,6 +701,7 @@ export function applyTextOps(state, ops) {
       if (price != null) { it.unitPrice = price; bits.push(formatMoney(price, { cents: price % 1 !== 0 })); }
       if (has(op, 'qty')) { it.qty = Math.max(1, Math.round(num(op.qty, 1)) || 1); bits.push(`qty ${it.qty}`); }
       if (has(op, 'store')) { it.store = String(op.store).trim(); bits.push(it.store); }
+      if (has(op, 'brand')) { it.brand = String(op.brand).trim(); bits.push(it.brand); }
       if (has(op, 'url')) {
         let link = it.links.find((l) => l.url === op.url);
         if (!link) {
@@ -693,6 +714,7 @@ export function applyTextOps(state, ops) {
       if (has(op, 'orderNumber')) { it.orderNumber = String(op.orderNumber); bits.push(`order ${it.orderNumber}`); }
       if (has(op, 'expectedDelivery')) { it.expectedDelivery = op.expectedDelivery; bits.push(`arrives ${shortDate(op.expectedDelivery)}`); }
       if (has(op, 'notes')) { it.notes = it.notes ? `${it.notes}\n${op.notes}` : String(op.notes); bits.push('note added'); }
+      if (!status && (has(op, 'brand') || has(op, 'url')) && promoteIfPicked(it)) bits.push('moved to To purchase');
 
       if (op.kind === 'addItem') parts.push(`Added '${it.name}' (${bits.join(', ')})`);
       else if (!bits.length) return fail(`I found '${it.name}' but not what to change.`);

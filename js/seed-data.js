@@ -389,6 +389,11 @@ export const updates = [
     id: '2026-10-26-closing-category',
     editTasks: CLOSING_IDS.map((id) => ({ id, set: { category: 'Closing' } })),
   },
+  {
+    // Everything not yet bought starts over as a suggestion; a brand or link moves it to To purchase.
+    id: '2026-10-26-shopping-suggested',
+    unboughtItemsTo: 'Suggested',
+  },
 ];
 
 export default { rooms, settings, tasks, items, homeInfo, updates };

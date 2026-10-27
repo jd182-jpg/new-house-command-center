@@ -35,7 +35,7 @@ export const OPS_SCHEMA = {
           start: { type: 'string', description: 'HH:MM, 24 hour' },
           end: { type: 'string', description: 'HH:MM, 24 hour' },
           confirmation: str, unitPrice: { type: 'number' }, qty: { type: 'integer' },
-          store: str, url: str, orderNumber: str, notes: str,
+          store: str, brand: str, url: str, orderNumber: str, notes: str,
           who: str, phone: str, email: str, location: str, role: str,
           docKind: { type: 'string', description: 'Estimate, Warranty, Notice, Receipt, Contract, Insurance, Manual or Other' },
           vendor: str, amount: { type: 'number' },
@@ -90,8 +90,8 @@ When there is something to change, call apply_changes once with all the ops. Whe
 Op kinds (leave out every field he did not mention):
 - updateTask: id plus any of status (${TASK_STATUSES.join(', ')}), date (the due date), confirmation, notes. "done: X" means status Done.
 - addTask: name (the title), optional category (${TASK_CATEGORIES.join(', ')}), priority (${TASK_PRIORITIES.join(', ')}), date (due), notes.
-- updateItem: id plus any of status (${ITEM_STATUSES.join(', ')}), unitPrice (number, per unit), qty, store, url, orderNumber, date (expected delivery), notes. "ordered/bought" means Ordered, "shipped" Shipped, "arrived/delivered" Delivered, "set up/hung/installed" Placed.
-- addItem: name, room (one of his rooms), optional category, priority (${ITEM_PRIORITIES.join(', ')}), status, unitPrice, qty, store, url, notes.
+- updateItem: id plus any of status (${ITEM_STATUSES.join(', ')}), brand (the brand or model he picked, like "Breville Barista Express"), unitPrice (number, per unit), qty, store, url, orderNumber, date (expected delivery), notes. A brand or link he sends for an item is his pick: set brand and/or url and leave status out (the app moves it from Suggested to To purchase). "ordered/bought" means Ordered, "shipped" Shipped, "arrived/delivered" Delivered, "set up/hung/installed" Placed.
+- addItem: name, room (one of his rooms), optional category, priority (${ITEM_PRIORITIES.join(', ')}), status, brand, unitPrice, qty, store, url, notes.
 - setClosingDate / setMoveInDate: date.
 - addAppointment: name (short title, like "Xfinity install"), date, start and end (24 hour HH:MM, for an arrival window use its start and end), who (company or person), phone, location (only if not the house), confirmation, notes, taskId or itemId when it clearly belongs to one.
 - updateAppointment: id plus the fields that changed. A reschedule changes date and times; a cancellation sets status Canceled.

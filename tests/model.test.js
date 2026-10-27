@@ -44,7 +44,7 @@ test('createItem fills defaults and coerces numbers', () => {
   assert.equal(it.unitPrice, 1250.5);
   assert.equal(it.dims.w, 96);
   assert.equal(it.dims.d, null);
-  assert.equal(it.status, 'Idea');
+  assert.equal(it.status, 'Suggested');
   assert.equal(it.stairOk, 'Need to check');
 });
 
@@ -71,8 +71,8 @@ test('budget summary counts only purchased items as spent', () => {
   const items = [
     createItem({ name: 'a', unitPrice: 100, qty: 2, status: 'Ordered' }),
     createItem({ name: 'b', unitPrice: 50, status: 'Placed' }),
-    createItem({ name: 'c', unitPrice: 300, status: 'Researching' }),
-    createItem({ name: 'd', status: 'Idea' }),
+    createItem({ name: 'c', unitPrice: 300, status: 'To purchase' }),
+    createItem({ name: 'd', status: 'Suggested' }),
   ];
   const s = budgetSummary(items, 400);
   assert.equal(s.spent, 250);
@@ -84,7 +84,7 @@ test('budget summary counts only purchased items as spent', () => {
   assert.equal(s.unpriced, 1);
   assert.equal(s.pctSpent, 63);
   assert.equal(s.statusCounts.Ordered, 1);
-  assert.equal(s.statusCounts.Idea, 1);
+  assert.equal(s.statusCounts.Suggested, 1);
 });
 
 test('budget summary flags over budget and handles no budget', () => {
@@ -338,4 +338,21 @@ test('closing tasks filed under Utilities move back to Closing, by id, once', ()
   assert.ok(closing.every((t) => t.category === 'Closing'));
   assert.equal(state.tasks.find((t) => t.title === 'Set up natural gas service').category, 'Utilities');
   assert.equal(applySeedUpdates(state, seed.updates).changed, false);
+});
+
+test('old Idea and Researching saves load as Suggested and To purchase', () => {
+  assert.equal(createItem({ status: 'Idea' }).status, 'Suggested');
+  assert.equal(createItem({ status: 'Researching', prevStatus: 'Idea' }).status, 'To purchase');
+  assert.equal(createItem({ status: 'Researching', prevStatus: 'Idea' }).prevStatus, 'Suggested');
+});
+
+test('the shopping reset sends every unbought item to Suggested and keeps bought ones', async () => {
+  const { applySeedUpdates } = await import('../js/model.js');
+  const state = {
+    settings: {}, tasks: [], homeInfo: {}, rooms: [], appliedUpdates: [],
+    items: [createItem({ name: 'a', status: 'To purchase', brand: 'X' }), createItem({ name: 'b', status: 'Placed' })],
+  };
+  const { state: next } = applySeedUpdates(state, [{ id: 'u', unboughtItemsTo: 'Suggested' }]);
+  assert.deepEqual(next.items.map((i) => i.status), ['Suggested', 'Placed']);
+  assert.equal(next.items[0].brand, 'X');
 });

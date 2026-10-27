@@ -86,7 +86,7 @@ test('applies ops, stamps a newer updatedAt, and replies with the confirmation',
   // undo puts the old copy back with an even newer stamp, once
   const undone = await handle(post('Undo'), env, { ...deps, now: () => 6000 });
   assert.equal(await undone.text(), "Undid: Marked 'Samsung The Frame Pro' Ordered, $1,999, Best Buy.");
-  assert.equal(db.payload().items.find((i) => i.id === frame.id).status, 'Idea');
+  assert.equal(db.payload().items.find((i) => i.id === frame.id).status, 'Suggested');
   assert.equal(db.payload().updatedAt, 6000);
   assert.equal(db.fields.undo, undefined);
   assert.match(await (await handle(post('undo'), env, deps)).text(), /Nothing to undo/);

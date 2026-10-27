@@ -162,7 +162,7 @@ function applyTheme() {
 
 function togglePurchased(item, purchasedStatus = 'Ordered') {
   if (M.isPurchased(item)) {
-    item.status = item.prevStatus && !M.PURCHASED_STATUSES.includes(item.prevStatus) ? item.prevStatus : 'Researching';
+    item.status = item.prevStatus && !M.PURCHASED_STATUSES.includes(item.prevStatus) ? item.prevStatus : 'To purchase';
     item.prevStatus = null;
   } else {
     item.prevStatus = item.status;
@@ -507,7 +507,7 @@ function filteredItems() {
   const f = ui.shopFilters;
   const q = f.q.trim().toLowerCase();
   return state.items.filter((i) =>
-    (!q || `${i.name} ${i.notes} ${i.store} ${i.category}`.toLowerCase().includes(q)) &&
+    (!q || `${i.name} ${i.brand} ${i.notes} ${i.store} ${i.category}`.toLowerCase().includes(q)) &&
     (!f.room || i.room === f.room) && (!f.category || i.category === f.category) &&
     (!f.status || i.status === f.status) && (!f.priority || i.priority === f.priority));
 }
@@ -598,7 +598,7 @@ function shopTable(list) {
     const total = M.itemTotal(i);
     return `<tr>
       <td>${orderedToggle(i)}</td>
-      <td><span class="item-name" data-act="edit-item" data-id="${i.id}">${esc(i.name)}</span> ${sourcePill(i)}
+      <td><span class="item-name" data-act="edit-item" data-id="${i.id}">${esc(i.name)}</span> ${sourcePill(i)}${i.brand ? `<div class="muted small">${esc(i.brand)}</div>` : ''}
         ${stair ? `<span class="pill warn" title="${esc(stair)}">Stairs?</span>` : ''}${fit && fit.level !== 'roomy' ? `<span class="pill warn" title="${esc(fit.message)}">Fit?</span>` : ''}</td>
       <td>${esc(i.room)}</td>
       <td><select data-change="item-field" data-field="priority" data-id="${i.id}" aria-label="Priority">${opts(M.ITEM_PRIORITIES, i.priority)}</select></td>
@@ -711,6 +711,7 @@ function renderItemModal() {
       <button type="button" class="icon-btn" data-act="close-modal" title="Close">${ICON.x}</button></div>
     <div class="form-grid">
       <label class="field full">Name<input data-f="name" value="${esc(d.name)}" required></label>
+      <label class="field full">Brand or model<input data-f="brand" value="${esc(d.brand)}" placeholder="Adding a brand or a link moves a suggestion to To purchase"></label>
       <label class="field">Room<select data-f="room">${opts(roomNames(), d.room)}</select></label>
       <label class="field">Category<select data-f="category">${opts(itemCategories(), d.category)}</select></label>
       <label class="field">Priority<select data-f="priority">${opts(M.ITEM_PRIORITIES, d.priority)}</select></label>
@@ -1126,7 +1127,9 @@ document.addEventListener('submit', (e) => {
     commit((s) => {
       const order = Math.max(-1, ...s.items.map((t) => t.order)) + 1;
       const links = safeUrl(data.link) ? [M.createLink({ url: safeUrl(data.link) })] : [];
-      s.items.push(M.createItem({ name: data.name, room: data.room, source: 'mine', order, links, chosenLinkId: links[0]?.id }));
+      const it = M.createItem({ name: data.name, room: data.room, source: 'mine', order, links, chosenLinkId: links[0]?.id });
+      M.promoteIfPicked(it);
+      s.items.push(it);
     });
     toast('Item added. Tap its name to add details.');
     $('[data-form="quick-item"] input[name="name"]')?.focus();
@@ -1146,6 +1149,10 @@ document.addEventListener('submit', (e) => {
     const { _isNew, ...rest } = draft;
     const clean = M.createItem({ ...rest, links: rest.links.filter((l) => l.url.trim() || l.label.trim()) });
     if (!clean.links.some((l) => l.id === clean.chosenLinkId)) clean.chosenLinkId = clean.links[0]?.id || null;
+    // A new brand or link on a suggestion moves it to To purchase.
+    const pickKey = (it) => [it.brand.trim(), ...it.links.map((l) => l.url.trim()).filter(Boolean).sort()].join('|');
+    const before = state.items.find((x) => x.id === clean.id);
+    if (!before || pickKey(before) !== pickKey(clean)) M.promoteIfPicked(clean);
     commit((s) => {
       const i = s.items.findIndex((x) => x.id === clean.id);
       if (i >= 0) s.items[i] = clean;

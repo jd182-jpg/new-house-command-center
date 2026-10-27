@@ -22,10 +22,10 @@ test('ordering an item sets status, price, store, delivery and counts as spent',
   assert.equal(r.summary, "Marked 'Samsung The Frame Pro' Ordered, $1,999, Best Buy, order BBY01-123, arrives Nov 22");
   const after = item(r.state, 'Samsung The Frame Pro');
   assert.equal(after.status, 'Ordered');
-  assert.equal(after.prevStatus, 'Idea');
+  assert.equal(after.prevStatus, 'Suggested');
   assert.equal(after.unitPrice, 1999);
   assert.equal(budgetSummary(r.state.items).spent, 1999);
-  assert.equal(item(s, 'Samsung The Frame Pro').status, 'Idea', 'input state is not mutated');
+  assert.equal(item(s, 'Samsung The Frame Pro').status, 'Suggested', 'input state is not mutated');
 });
 
 test('a link is added once and chosen', () => {
@@ -64,7 +64,7 @@ test('adding an item puts it in a known room, else Whole house', () => {
   assert.equal(r.ok, true);
   assert.equal(r.summary, "Added 'Bar stools' (Kitchen, qty 3); Added 'Hammock' (Whole house)");
   assert.equal(item(r.state, 'Bar stools').source, 'mine');
-  assert.equal(item(r.state, 'Bar stools').status, 'Idea');
+  assert.equal(item(r.state, 'Bar stools').status, 'Suggested');
 });
 
 test('duplicates, unknown ids and bad values change nothing', () => {
@@ -111,7 +111,7 @@ test('text ops never touch Home Info or the edit stamp', () => {
 test('parser view lists ids and leaves out Wi-Fi passwords', () => {
   const s = fresh();
   const text = describeForParser(s);
-  assert.ok(text.includes(`${item(s, 'Samsung The Frame Pro').id} | Idea | Living`));
+  assert.ok(text.includes(`${item(s, 'Samsung The Frame Pro').id} | Suggested | Living`));
   assert.ok(text.includes(s.tasks[0].id));
   assert.ok(!text.includes('secret-pass'));
 });
@@ -195,4 +195,21 @@ test('old saved data without appointments or documents still loads', () => {
   const r = applyTextOps(s, [{ kind: 'addTask', title: 'x' }]);
   assert.deepEqual(r.state.appointments, []);
   assert.deepEqual(r.state.documents, []);
+});
+
+test('a brand or link moves a suggestion to To purchase; notes alone do not', () => {
+  const s = fresh();
+  const mixer = s.items.find((i) => i.status === 'Suggested');
+  let r = applyTextOps(s, [{ kind: 'updateItem', itemId: mixer.id, notes: 'want it in black' }]);
+  assert.equal(item(r.state, mixer.name).status, 'Suggested');
+  r = applyTextOps(r.state, [{ kind: 'updateItem', itemId: mixer.id, brand: 'KitchenAid Artisan 5qt' }]);
+  assert.equal(item(r.state, mixer.name).status, 'To purchase');
+  assert.equal(item(r.state, mixer.name).brand, 'KitchenAid Artisan 5qt');
+  assert.ok(r.summary.includes('moved to To purchase'));
+
+  const other = s.items.filter((i) => i.status === 'Suggested')[1];
+  r = applyTextOps(s, [{ kind: 'updateItem', itemId: other.id, url: 'https://example.com/x' }]);
+  assert.equal(item(r.state, other.name).status, 'To purchase');
+  r = applyTextOps(s, [{ kind: 'updateItem', itemId: other.id, url: 'https://example.com/x', status: 'Ordered' }]);
+  assert.equal(item(r.state, other.name).status, 'Ordered', 'an explicit status wins');
 });
