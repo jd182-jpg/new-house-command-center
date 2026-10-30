@@ -17,14 +17,14 @@ Then open http://localhost:8080. You need the server because browsers block Java
 npm test
 ```
 
-The tests use Node's built-in test runner (Node 18 or newer), so there is nothing to install. They cover the data model, the text-update operations and endpoint, the budget math, progress, do-next ordering, reordering, the fit check, the stair warnings, the Wi-Fi QR payload, the sync reconcile rules, and a two-device sync run against a fake Firestore.
+The tests use Node's built-in test runner (Node 18 or newer), so there is nothing to install. They cover the data model, the text-update operations and endpoint, progress, do-next ordering, reordering, the fit check, the stair warnings, the Wi-Fi QR payload, the sync reconcile rules, and a two-device sync run against a fake Firestore.
 
 ## Files
 
 | File | What it does |
 | --- | --- |
 | `js/seed-data.js` | **Edit this one.** Starter tasks, shopping items, rooms, and home info. |
-| `js/model.js` | Pure logic (budget math, progress, do-next, fit check, QR payload). No DOM. |
+| `js/model.js` | Pure logic (progress, do-next, fit check, QR payload). No DOM. |
 | `js/store.js` | Saving to localStorage, plus import and export. |
 | `js/sync.js` | Cross-device sync with Firestore and the header badge. |
 | `js/sync-config.js` | **Paste your Firebase config here** to turn sync on. Also holds the document id. |

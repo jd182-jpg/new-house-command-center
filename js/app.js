@@ -188,13 +188,7 @@ function renderView() {
 
 function viewDashboard() {
   const s = state.settings;
-  const mi = M.daysUntil(s.moveInDate);
   const cl = M.daysUntil(s.closingDate);
-  let big; let label;
-  if (mi == null) { big = '?'; label = 'Add your move-in date to start the countdown.'; }
-  else if (mi > 0) { big = mi; label = `day${mi === 1 ? '' : 's'} until move-in`; }
-  else if (mi === 0) { big = 'Today'; label = 'Move-in day. Lift with your legs.'; }
-  else { big = -mi; label = `day${mi === -1 ? '' : 's'} since move-in. Welcome home.`; }
   const closingLine = cl == null ? 'Closing date not set yet.'
     : cl > 0 ? `Closing in ${cl} day${cl === 1 ? '' : 's'} (${fmtDate(s.closingDate)}).`
       : cl === 0 ? 'Closing is today. Bring a pen and ID.' : `Closed ${fmtDate(s.closingDate)}. It's yours.`;
@@ -203,25 +197,15 @@ function viewDashboard() {
   const C = 2 * Math.PI * 56;
   const bars = [...M.TASK_CATEGORIES.map((c) => [c, M.taskProgress(state.tasks, c)]), ['Shopping', M.shoppingProgress(state.items)]];
   const next = M.doNext(state.tasks, 5);
-  const b = M.budgetSummary(state.items, s.budget);
+  const counts = M.budgetSummary(state.items).statusCounts;
   const soon = state.items
     .filter((i) => i.expectedDelivery && ['Ordered', 'Shipped'].includes(i.status))
     .sort((a, c) => (a.expectedDelivery < c.expectedDelivery ? -1 : 1)).slice(0, 5);
 
   return `
-  <div class="page-head"><div><h1>Howdy, Jackson.</h1><p>Here's where the move stands.</p></div></div>
+  <div class="page-head"><div><h1>Howdy, Jackson.</h1><p>${esc(closingLine)}</p></div></div>
   <div class="grid dash-grid">
-    <section class="card countdown span-5">
-      <h2>Move-in countdown</h2>
-      <div><div class="big-num">${esc(big)}</div><div class="label">${esc(label)}</div></div>
-      <div class="label">${esc(closingLine)}</div>
-      <div class="dates">
-        <label class="field">Closing date<input type="date" data-change="setting" data-key="closingDate" value="${esc(s.closingDate)}"></label>
-        <label class="field">Move-in date<input type="date" data-change="setting" data-key="moveInDate" value="${esc(s.moveInDate)}"></label>
-      </div>
-    </section>
-
-    <section class="card span-7">
+    <section class="card span-12">
       <h2>Progress</h2>
       <div class="progress-wrap">
         <div class="ring" role="img" aria-label="${overall.pct}% complete overall">
@@ -249,18 +233,8 @@ function viewDashboard() {
     </section>
 
     <section class="card span-5">
-      <div class="card-head"><h2>Shopping budget</h2><a href="#shopping" class="small">Open shopping</a></div>
-      ${b.budget == null
-    ? '<div class="callout">No budget yet. Set one in Shopping or Settings to see what is left.</div>'
-    : `<div class="meter lg ${b.overBudget ? 'over' : ''}"><i style="width:${b.pctSpent}%"></i></div>`}
-      <div class="stat-row">
-        <div class="stat"><span>Spent</span><strong>${money(b.spent)}</strong></div>
-        <div class="stat"><span>Budget</span><strong>${b.budget == null ? 'None' : money(b.budget)}</strong></div>
-        <div class="stat ${b.overBudget ? 'over' : ''}"><span>${b.overBudget ? 'Over by' : 'Left'}</span><strong>${b.remaining == null ? '...' : money(Math.abs(b.remaining))}</strong></div>
-      </div>
-      ${b.plannedOverBudget && !b.overBudget ? `<div class="callout warn" style="margin-bottom:10px">Heads up: priced items total ${money(b.planned)}, which is over budget.</div>` : ''}
-      ${b.overBudget ? '<div class="callout danger" style="margin-bottom:10px">Over budget. Time to move something to Later.</div>' : ''}
-      <div class="chips">${M.ITEM_STATUSES.map((st) => `<span class="pill">${esc(st)} ${b.statusCounts[st]}</span>`).join('')}</div>
+      <div class="card-head"><h2>Shopping</h2><a href="#shopping" class="small">Open shopping</a></div>
+      <div class="chips">${M.ITEM_STATUSES.map((st) => `<span class="pill">${esc(st)} ${counts[st]}</span>`).join('')}</div>
       ${soon.length ? `<div class="section-label">Arriving soon</div><ul class="donext">${soon.map((i) => `
         <li><div class="title">${esc(i.name)}<small>${esc(i.room)} · ${esc(i.status)}</small></div><span class="pill">${fmtDate(i.expectedDelivery)}</span></li>`).join('')}</ul>` : ''}
     </section>
@@ -513,8 +487,6 @@ function filteredItems() {
 }
 
 function viewShopping() {
-  const s = state.settings;
-  const b = M.budgetSummary(state.items, s.budget);
   const f = ui.shopFilters;
   const filtering = f.q || f.room || f.category || f.status || f.priority;
   const purchased = state.items.filter(M.isPurchased).length;
@@ -530,15 +502,7 @@ function viewShopping() {
   return `
   <div class="page-head"><div><h1>Shopping and supplies</h1><p>Save links to options, pick one, and tick it off once ordered.</p></div>
     <div class="segmented">${views.map(([v, l]) => `<button class="${ui.shopView === v ? 'on' : ''}" data-act="shop-view" data-v="${v}">${l}</button>`).join('')}</div></div>
-  ${ui.shopView === 'shop' ? '' : `<div class="budget-strip">
-    <label class="stat field">Overall budget<input type="number" min="0" step="100" inputmode="decimal" placeholder="Set a budget" value="${s.budget ?? ''}" data-change="setting" data-key="budget"></label>
-    <div class="stat"><span>Spent (ordered and up)</span><strong>${money(b.spent)}</strong></div>
-    <div class="stat"><span>All priced items</span><strong>${money(b.planned)}</strong>${b.unpriced ? `<span>${b.unpriced} not priced yet</span>` : ''}</div>
-    <div class="stat ${b.overBudget ? 'over' : ''}"><span>${b.overBudget ? 'Over budget by' : 'Remaining'}</span><strong>${b.remaining == null ? 'No budget' : money(Math.abs(b.remaining))}</strong></div>
-    <div class="stat"><span>Ordered</span><strong>${purchased} of ${state.items.length}</strong></div>
-  </div>
-  ${b.overBudget ? '<div class="callout danger" style="margin-bottom:14px">You are over the overall budget. Some of this can wait for Later.</div>'
-    : b.plannedOverBudget ? `<div class="callout warn" style="margin-bottom:14px">Everything you have priced adds up to ${money(b.planned)}, which would go over budget by ${money(b.planned - b.budget)}.</div>` : ''}`}
+  ${ui.shopView === 'shop' ? '' : `<p class="muted small" style="margin:0 0 12px">${purchased} of ${state.items.length} ordered</p>`}
   ${ui.shopView === 'shop' ? '' : `
   <form class="quick-add" data-form="quick-item">
     <input name="name" placeholder="Add an item, like &quot;Bar stools&quot;" autocomplete="off" aria-label="New item">
@@ -632,18 +596,12 @@ function shopRooms(list) {
   return withItems.map((r) => {
     const info = rooms.get(r.room) || {};
     const items = list.filter((i) => i.room === r.room).sort((a, b) => a.order - b.order);
-    const budgetVal = state.settings.roomBudgets[r.room] ?? '';
     return `<section class="card room-card">
       <div class="room-head">
         <h2>${esc(r.room)}</h2>
         <span class="muted small">${info.level ? `Floor ${info.level}` : ''}${info.w ? ` · ${info.w}x${info.l} ft` : ''}</span>
         <span class="spacer"></span>
-        <span class="small">Subtotal <b>${money(r.planned)}</b> · Spent <b>${money(r.spent)}</b></span>
-        <label class="room-budget">Budget <input type="number" min="0" step="50" inputmode="decimal" value="${esc(budgetVal)}" data-change="room-budget" data-room="${esc(r.room)}" placeholder="None"></label>
-        ${r.budget != null ? `<span class="pill ${r.overBudget ? 'high' : r.plannedOverBudget ? 'medium' : 'ok'}">${r.overBudget ? `Over by ${money(-r.remaining)}` : `${money(r.remaining)} left`}</span>` : ''}
       </div>
-      ${r.budget != null ? `<div class="meter ${r.overBudget ? 'over' : ''}" style="margin-bottom:8px"><i style="width:${r.pctSpent}%"></i></div>` : ''}
-      ${r.plannedOverBudget && !r.overBudget ? `<div class="callout warn small" style="margin-bottom:8px">Priced items total ${money(r.planned)}, over this room's budget.</div>` : ''}
       <ul class="room-items">${items.map((i) => `<li>${orderedToggle(i)}
         <span class="grow"><span class="item-name" data-act="edit-item" data-id="${i.id}">${esc(i.name)}</span> ${sourcePill(i)}</span>
         <span class="pill">${esc(i.status)}</span><span class="num" style="min-width:80px;text-align:right">${M.itemTotal(i) ? money(M.itemTotal(i)) : '<span class="muted">...</span>'}</span></li>`).join('')}</ul>
@@ -858,16 +816,13 @@ function drawQr() {
 function viewSettings() {
   const s = state.settings;
   return `
-  <div class="page-head"><div><h1>Settings</h1><p>Dates, budget, look, and your data.</p></div></div>
+  <div class="page-head"><div><h1>Settings</h1><p>Dates, look, and your data.</p></div></div>
   <div class="grid dash-grid">
-    <section class="card span-6"><h2>Dates and budget</h2>
+    <section class="card span-6"><h2>Dates</h2>
       <div class="form-grid">
         <label class="field">Closing date<input type="date" data-change="setting" data-key="closingDate" value="${esc(s.closingDate)}"></label>
         <label class="field">Move-in date<input type="date" data-change="setting" data-key="moveInDate" value="${esc(s.moveInDate)}"></label>
-        <label class="field full">Overall shopping budget<input type="number" min="0" step="100" inputmode="decimal" data-change="setting" data-key="budget" value="${s.budget ?? ''}" placeholder="e.g. 25000"></label>
       </div>
-      <div class="section-label">Room budgets</div>
-      <div class="form-grid">${roomNames().map((r) => `<label class="field">${esc(r)}<input type="number" min="0" step="50" inputmode="decimal" data-change="room-budget" data-room="${esc(r)}" value="${esc(s.roomBudgets[r] ?? '')}" placeholder="None"></label>`).join('')}</div>
     </section>
     <section class="card span-6"><h2>Look</h2>
       <label class="field">Theme<select data-change="setting" data-key="theme">${[['auto', 'Match my device'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => `<option value="${v}"${s.theme === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -1035,16 +990,11 @@ document.addEventListener('change', async (e) => {
   const kind = el.dataset.change;
   if (kind === 'setting') {
     const key = el.dataset.key;
-    commit((s) => { s.settings[key] = key === 'budget' ? (el.value === '' ? null : Math.max(0, Number(el.value))) : el.value; });
+    commit((s) => { s.settings[key] = el.value; });
     if (key === 'theme') applyTheme();
   } else if (kind === 'sync-wifi') {
     commit((s) => { s.settings.syncWifiPasswords = el.checked; });
     toast(el.checked ? 'Wi-Fi passwords will sync.' : 'Wi-Fi passwords now stay on each device.');
-  } else if (kind === 'room-budget') {
-    commit((s) => {
-      if (el.value === '') delete s.settings.roomBudgets[el.dataset.room];
-      else s.settings.roomBudgets[el.dataset.room] = Math.max(0, Number(el.value));
-    });
   } else if (kind === 'task-status') {
     commit((s) => { s.tasks.find((x) => x.id === el.dataset.id).status = el.value; });
   } else if (kind === 'item-field') {
