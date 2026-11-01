@@ -397,3 +397,33 @@ details.past summary { cursor: pointer; }
 .lock-card input { font: inherit; font-size: 18px; text-align: center; letter-spacing: 4px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); }
 .lock-mark { width: 44px; height: 44px; margin: 0 auto; border-radius: 12px; background: var(--navy) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M14 34 32 18l18 16v14H38V38H26v10H14z' fill='%23ffffff'/%3E%3C/svg%3E") center/70% no-repeat; }
 .lock-error { color: var(--danger); font-size: 13px; min-height: 1em; }
+
+/* Jackie design studio */
+.jk-studio { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
+.jk-studio figure { margin: 0; }
+.jk-studio img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: var(--radius-sm); display: block; }
+.jk-studio figcaption { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.jk-filter { margin: 18px 0 12px; }
+.jk-filter .segmented { flex-wrap: wrap; }
+.jk-room { margin-bottom: 16px; }
+.jk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-bottom: 8px; }
+.jk-product { border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; background: var(--surface); display: flex; flex-direction: column; }
+.jk-product img, .jk-nophoto { width: 100%; aspect-ratio: 1; object-fit: contain; background: #fff; display: block; }
+.jk-nophoto { display: grid; place-items: center; color: var(--muted); font-size: 13px; background: var(--surface-2); }
+.jk-body { padding: 10px 12px; display: grid; gap: 3px; }
+.jk-versions { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.jk-version { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px; display: grid; gap: 4px; align-content: start; }
+.jk-version ul { margin: 4px 0; padding-left: 18px; }
+.jk-rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.jk-roomcard { border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
+.jk-roomcard img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; display: block; }
+@media (max-width: 720px) {
+  .jk-studio { grid-template-columns: 1fr; }
+  .jk-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+}
+.jk-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 2px; }
+.brand-text strong { white-space: nowrap; }
+@media (max-width: 1180px) and (min-width: 721px) {
+  .tabs a svg { display: none; }
+  .brand-text small { display: none; }
+}

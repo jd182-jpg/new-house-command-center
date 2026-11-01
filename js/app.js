@@ -4,6 +4,7 @@ import * as M from './model.js';
 import { loadState, saveState, resetToSeed, exportJSON, importJSON } from './store.js';
 import { startSync } from './sync.js';
 import seed from './seed-data.js';
+import jackie from './jackie-data.js';
 import { FIREBASE_CONFIG, COLLECTION, DOC_ID } from './sync-config.js';
 
 const SYNC_ON = !!(FIREBASE_CONFIG && FIREBASE_CONFIG.projectId);
@@ -172,7 +173,7 @@ function togglePurchased(item, purchasedStatus = 'Ordered') {
 
 // ---------- Router ----------
 
-const ROUTES = { dashboard: viewDashboard, tasks: viewTasks, shopping: viewShopping, home: viewHome, files: viewFiles, settings: viewSettings };
+const ROUTES = { dashboard: viewDashboard, tasks: viewTasks, shopping: viewShopping, home: viewHome, files: viewFiles, jackie: viewJackie, settings: viewSettings };
 const route = () => (location.hash.slice(1) in ROUTES ? location.hash.slice(1) : 'dashboard');
 
 function renderView() {
@@ -813,6 +814,96 @@ function drawQr() {
 
 // ---------- Settings ----------
 
+// ---------- Jackie (design studio) ----------
+
+// Read-only view of Jackie's design studio workbook (js/jackie-data.js).
+const inToFt = (n) => (n ? `${Math.round(Number(n) / 12)}` : '');
+
+function jackieProduct(p) {
+  const url = safeUrl(p.url);
+  const by = [p.retailer, p.brand && p.brand !== p.retailer ? p.brand : ''].filter(Boolean).join(' · ');
+  return `<article class="jk-product">
+    ${p.photo ? `<img src="${esc(p.photo)}" alt="${esc(p.name || p.category)}" loading="lazy">` : '<div class="jk-nophoto">No photo</div>'}
+    <div class="jk-body">
+      <div class="jk-meta"><span class="pill">${esc(p.category)}</span><span class="muted small">${esc(p.id)} · Option ${esc(p.option || '1')}</span></div>
+      <strong>${esc(p.name || 'Unnamed')}</strong>
+      ${by ? `<div class="muted small">${esc(by)}</div>` : ''}
+      ${url ? `<a class="small" href="${esc(url)}" target="_blank" rel="noopener">View product</a>` : ''}
+    </div>
+  </article>`;
+}
+
+function viewJackie() {
+  const J = jackie;
+  const rooms = [...new Set(J.products.map((p) => p.room))];
+  const pick = rooms.includes(ui.jackieRoom) ? ui.jackieRoom : '';
+  const list = J.products.filter((p) => !pick || p.room === pick);
+  const byRoom = rooms.filter((rm) => !pick || rm === pick).map((rm) => {
+    const items = list.filter((p) => p.room === rm);
+    const order = [...new Set(items.map((p) => p.category))];
+    items.sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category) || Number(a.option) - Number(b.option));
+    return `<section class="card jk-room">
+      <div class="card-head"><h2>${esc(rm)}</h2><span class="muted small">${items.length} options</span></div>
+      <div class="jk-grid">${items.map(jackieProduct).join('')}</div>
+    </section>`;
+  }).join('');
+  const prodName = (id) => (J.products.find((p) => p.id === id) || {}).name;
+  const st = J.studio;
+  return `
+  <div class="page-head"><div><h1>Jackie</h1><p>Design studio from Jackie: ${J.products.length} product options, design versions and room notes.</p></div></div>
+
+  <section class="card">
+    <div class="card-head"><h2>Living room studio</h2></div>
+    <p class="muted" style="margin-top:0">${esc(st.brief)}</p>
+    <div class="jk-studio">
+      <figure><img src="${esc(st.actual)}" alt="Living room listing photo" loading="lazy"><figcaption>Actual room, listing photo</figcaption></figure>
+      <figure><img src="${esc(st.concept)}" alt="${esc(st.conceptLabel)}" loading="lazy"><figcaption>${esc(st.conceptLabel)}</figcaption></figure>
+    </div>
+    <p class="small">${esc(st.note)}</p>
+    <div class="callout small">${esc(st.next)}</div>
+  </section>
+
+  <div class="toolbar jk-filter">
+    <div class="segmented">${[['', 'All rooms'], ...rooms.map((rm) => [rm, rm])].map(([v, l]) => `<button class="${pick === v ? 'on' : ''}" data-act="jackie-room" data-v="${esc(v)}">${esc(l)}</button>`).join('')}</div>
+  </div>
+  ${byRoom}
+
+  <section class="card">
+    <div class="card-head"><h2>Design versions</h2></div>
+    <div class="jk-versions">${J.versions.map((v) => {
+      const sel = J.selections.filter((x) => x.version === v.id);
+      return `<div class="jk-version">
+        <div class="muted small">${esc(v.id)} · ${esc(v.room)}</div>
+        <strong>${esc(v.name)}</strong> <span class="pill">${esc(v.status)}</span>
+        <ul class="small">${sel.map((x) => `<li>${esc(x.product)}${prodName(x.product) ? `: ${esc(prodName(x.product))}` : ' (product not in the catalog yet)'}${x.notes ? ` <span class="muted">${esc(x.notes)}</span>` : ''}</li>`).join('')}</ul>
+        ${v.likes ? `<div class="small"><b>Likes:</b> ${esc(v.likes)}</div>` : ''}
+        ${v.changes ? `<div class="small"><b>Changes:</b> ${esc(v.changes)}</div>` : ''}
+        <div class="small muted">Fit: ${esc(v.fit || 'Not verified')}</div>
+      </div>`;
+    }).join('')}</div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Room profiles</h2></div>
+    <div class="jk-rooms">${J.rooms.map((rm) => `<div class="jk-roomcard">
+      ${safeUrl(rm.concept || rm.photo1) ? `<img src="${esc(safeUrl(rm.concept || rm.photo1))}" alt="${esc(rm.room)}" loading="lazy">` : ''}
+      <div class="jk-body">
+        <strong>${esc(rm.room)}</strong>
+        <div class="muted small">Floor ${esc(rm.level)}${rm.length ? ` · about ${inToFt(rm.length)} x ${inToFt(rm.width)} ft` : ''} · ${esc(rm.basis)}</div>
+        ${rm.style ? `<div class="small"><b>Style:</b> ${esc(rm.style)}</div>` : ''}
+        ${rm.architecture ? `<div class="small"><b>Keep:</b> ${esc(rm.architecture)}</div>` : ''}
+        ${rm.next ? `<div class="small"><b>To measure:</b> ${esc(rm.next)}</div>` : ''}
+      </div>
+    </div>`).join('')}</div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Openings to measure</h2></div>
+    <ul class="donext">${J.openings.map((o) => `<li><div class="title">${esc(o.id)}: ${esc(o.type)}<small>${esc(o.room)} · ${esc(o.where)}</small></div><span class="small muted">${esc(o.notes)}</span></li>`).join('')}</ul>
+  </section>
+  <p class="muted small">Source: ${esc(J.source)}. This tab is a read-only copy; send an updated workbook to refresh it.</p>`;
+}
+
 function viewSettings() {
   const s = state.settings;
   return `
@@ -880,6 +971,7 @@ document.addEventListener('click', async (e) => {
     case 'clear-task-filters': ui.taskFilters = { q: '', cat: '', status: '', priority: '', hideDone: false }; saveUi(); renderView(); break;
     case 'shop-view': ui.shopView = el.dataset.v; saveUi(); renderView(); break;
     case 'doc-kind': ui.docKind = el.dataset.v; saveUi(); renderView(); break;
+    case 'jackie-room': ui.jackieRoom = el.dataset.v; saveUi(); renderView(); break;
     case 'appt-done': commit((s) => { s.appointments.find((a) => a.id === id).status = 'Done'; }); break;
     case 'delete-appt': {
       const a = state.appointments.find((x) => x.id === id);
