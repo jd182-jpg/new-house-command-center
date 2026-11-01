@@ -350,12 +350,14 @@ td select { width: auto; min-height: 30px; padding: 3px 8px; font-size: 13px; }
   .sync-badge { margin-left: auto; }
   .tabs {
     position: fixed; bottom: 0; left: 0; right: 0; justify-content: space-around; margin: 0; z-index: 30;
-    background: var(--surface); border-top: 1px solid var(--line); padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    background: var(--surface); border-top: 1px solid var(--line); gap: 0; padding: 6px 2px calc(6px + env(safe-area-inset-bottom));
   }
-  .tabs a { flex-direction: column; gap: 2px; font-size: 11px; padding: 6px 4px; border-radius: 10px; color: var(--muted); }
+  .tabs a { flex: 1 1 0; min-width: 0; flex-direction: column; gap: 2px; font-size: 10px; letter-spacing: -0.1px; white-space: nowrap; padding: 6px 0; border-radius: 10px; color: var(--muted); }
   .tabs a:hover { background: var(--surface-2); color: var(--ink); }
   .tabs a svg { display: block; }
   .tabs a.active { background: var(--accent-soft); color: var(--heading); box-shadow: none; }
+  .tabs a span[data-short] { font-size: 0; }
+  .tabs a span[data-short]::after { content: attr(data-short); font-size: 10px; }
   main { padding: 16px 16px 110px; }
   h1 { font-size: 26px; }
   .form-grid, .form-grid.three { grid-template-columns: 1fr; }

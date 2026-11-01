@@ -173,8 +173,8 @@ function togglePurchased(item, purchasedStatus = 'Ordered') {
 
 // ---------- Router ----------
 
-const ROUTES = { dashboard: viewDashboard, tasks: viewTasks, shopping: viewShopping, home: viewHome, files: viewFiles, jackie: viewJackie, settings: viewSettings };
-const route = () => (location.hash.slice(1) in ROUTES ? location.hash.slice(1) : 'dashboard');
+const ROUTES = { dashboard: viewDashboard, tasks: viewTasks, shopping: viewShopping, home: viewHome, files: viewFiles, design: viewJackie, settings: viewSettings };
+const route = () => { const h = location.hash.slice(1) === 'jackie' ? 'design' : location.hash.slice(1); return h in ROUTES ? h : 'dashboard'; };
 
 function renderView() {
   const r = route();
@@ -814,7 +814,7 @@ function drawQr() {
 
 // ---------- Settings ----------
 
-// ---------- Jackie (design studio) ----------
+// ---------- Design (Jackie's design studio) ----------
 
 // Read-only view of Jackie's design studio workbook (js/jackie-data.js).
 const inToFt = (n) => (n ? `${Math.round(Number(n) / 12)}` : '');
@@ -850,7 +850,7 @@ function viewJackie() {
   const prodName = (id) => (J.products.find((p) => p.id === id) || {}).name;
   const st = J.studio;
   return `
-  <div class="page-head"><div><h1>Jackie</h1><p>Design studio from Jackie: ${J.products.length} product options, design versions and room notes.</p></div></div>
+  <div class="page-head"><div><h1>Design</h1><p>Jackie's design studio: ${J.products.length} product options, design versions and room notes.</p></div></div>
 
   <section class="card">
     <div class="card-head"><h2>Living room studio</h2></div>
