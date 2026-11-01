@@ -355,7 +355,7 @@ td select { width: auto; min-height: 30px; padding: 3px 8px; font-size: 13px; }
   .tabs a { flex-direction: column; gap: 2px; font-size: 11px; padding: 6px 4px; border-radius: 10px; color: var(--muted); }
   .tabs a:hover { background: var(--surface-2); color: var(--ink); }
   .tabs a svg { display: block; }
-  .tabs a.active { background: var(--accent-soft); color: var(--navy); box-shadow: none; }
+  .tabs a.active { background: var(--accent-soft); color: var(--heading); box-shadow: none; }
   main { padding: 16px 16px 110px; }
   h1 { font-size: 26px; }
   .form-grid, .form-grid.three { grid-template-columns: 1fr; }
@@ -427,3 +427,8 @@ details.past summary { cursor: pointer; }
   .tabs a svg { display: none; }
   .brand-text small { display: none; }
 }
+.jk-gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 12px 0; }
+.jk-gallery figure { margin: 0; }
+.jk-gallery img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius-sm); display: block; }
+.jk-gallery figcaption { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.jk-notes { display: grid; gap: 6px; }

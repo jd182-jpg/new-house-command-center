@@ -5,6 +5,7 @@ import { loadState, saveState, resetToSeed, exportJSON, importJSON } from './sto
 import { startSync } from './sync.js';
 import seed from './seed-data.js';
 import jackie from './jackie-data.js';
+import bedroom from './bedroom-data.js';
 import { FIREBASE_CONFIG, COLLECTION, DOC_ID } from './sync-config.js';
 
 const SYNC_ON = !!(FIREBASE_CONFIG && FIREBASE_CONFIG.projectId);
@@ -173,7 +174,7 @@ function togglePurchased(item, purchasedStatus = 'Ordered') {
 
 // ---------- Router ----------
 
-const ROUTES = { dashboard: viewDashboard, tasks: viewTasks, shopping: viewShopping, home: viewHome, files: viewFiles, jackie: viewJackie, settings: viewSettings };
+const ROUTES = { dashboard: viewDashboard, tasks: viewTasks, shopping: viewShopping, home: viewHome, files: viewFiles, bedroom: viewBedroom, jackie: viewJackie, settings: viewSettings };
 const route = () => (location.hash.slice(1) in ROUTES ? location.hash.slice(1) : 'dashboard');
 
 function renderView() {
@@ -814,11 +815,49 @@ function drawQr() {
 
 // ---------- Settings ----------
 
+// ---------- Bedroom (primary bedroom design board) ----------
+
+// Same card layout as Jackie's page, from js/bedroom-data.js.
+function viewBedroom() {
+  const B = bedroom;
+  const cats = [...new Set(B.products.map((p) => p.category))];
+  const pick = cats.includes(ui.bedCat) ? ui.bedCat : '';
+  const room = jackie.rooms.find((r) => r.room === 'Primary Bedroom') || {};
+  return `
+  <div class="page-head"><div><h1>Primary bedroom</h1><p>${esc(B.intro)}</p></div></div>
+
+  <section class="card">
+    <div class="card-head"><h2>The room and the concepts</h2><a class="small" href="https://2608.darr.solutions/" target="_blank" rel="noopener">Design brief</a></div>
+    <div class="jk-gallery">${B.photos.map((ph) => `<figure><img src="${esc(ph.src)}" alt="${esc(ph.caption)}" loading="lazy"><figcaption>${esc(ph.caption)}</figcaption></figure>`).join('')}</div>
+    <div class="jk-notes">${B.notes.map((n) => `<div class="small"><b>${esc(n.label)}:</b> ${esc(n.text)}</div>`).join('')}</div>
+  </section>
+
+  <div class="toolbar jk-filter">
+    <div class="segmented">${[['', 'Everything'], ...cats.map((c) => [c, c])].map(([v, l]) => `<button class="${pick === v ? 'on' : ''}" data-act="bed-cat" data-v="${esc(v)}">${esc(l)}</button>`).join('')}</div>
+  </div>
+  ${cats.filter((c) => !pick || c === pick).map((c) => {
+    const items = B.products.filter((p) => p.category === c);
+    return `<section class="card jk-room">
+      <div class="card-head"><h2>${esc(c)}</h2><span class="muted small">${items.length} option${items.length === 1 ? '' : 's'}</span></div>
+      <div class="jk-grid">${items.map(jackieProduct).join('')}</div>
+    </section>`;
+  }).join('')}
+
+  ${room.room ? `<section class="card">
+    <div class="card-head"><h2>Before you buy</h2></div>
+    <div class="small"><b>Size:</b> about ${inToFt(room.length)} x ${inToFt(room.width)} ft, floor ${esc(room.level)} (${esc(room.basis).toLowerCase()})</div>
+    ${room.next ? `<div class="small"><b>To confirm:</b> ${esc(room.next)}</div>` : ''}
+    <div class="small"><b>Stairs:</b> it is a third-floor room, so check the stair turns for the bed, dresser and any chair before ordering.</div>
+  </section>` : ''}
+  <p class="muted small">${esc(B.source)}</p>`;
+}
+
 // ---------- Jackie (design studio) ----------
 
 // Read-only view of Jackie's design studio workbook (js/jackie-data.js).
 const inToFt = (n) => (n ? `${Math.round(Number(n) / 12)}` : '');
 
+// A product option card, shared by the Jackie and Bedroom pages.
 function jackieProduct(p) {
   const url = safeUrl(p.url);
   const by = [p.retailer, p.brand && p.brand !== p.retailer ? p.brand : ''].filter(Boolean).join(' · ');
@@ -828,6 +867,9 @@ function jackieProduct(p) {
       <div class="jk-meta"><span class="pill">${esc(p.category)}</span><span class="muted small">${esc(p.id)} · Option ${esc(p.option || '1')}</span></div>
       <strong>${esc(p.name || 'Unnamed')}</strong>
       ${by ? `<div class="muted small">${esc(by)}</div>` : ''}
+      ${p.price ? `<div class="small"><b>${esc(p.price)}</b>${p.dims ? ` <span class="muted">· ${esc(p.dims)}</span>` : ''}</div>` : p.dims ? `<div class="small muted">${esc(p.dims)}</div>` : ''}
+      ${p.material ? `<div class="small muted">${esc(p.material)}</div>` : ''}
+      ${p.why ? `<div class="small">${esc(p.why)}</div>` : ''}
       ${url ? `<a class="small" href="${esc(url)}" target="_blank" rel="noopener">View product</a>` : ''}
     </div>
   </article>`;
@@ -972,6 +1014,7 @@ document.addEventListener('click', async (e) => {
     case 'shop-view': ui.shopView = el.dataset.v; saveUi(); renderView(); break;
     case 'doc-kind': ui.docKind = el.dataset.v; saveUi(); renderView(); break;
     case 'jackie-room': ui.jackieRoom = el.dataset.v; saveUi(); renderView(); break;
+    case 'bed-cat': ui.bedCat = el.dataset.v; saveUi(); renderView(); break;
     case 'appt-done': commit((s) => { s.appointments.find((a) => a.id === id).status = 'Done'; }); break;
     case 'delete-appt': {
       const a = state.appointments.find((x) => x.id === id);
