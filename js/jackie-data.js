@@ -1,7 +1,7 @@
-// Jackie's design studio workbook (Jackson_Condo_Design_Studio.xlsx), converted 2026-10-31.
+// Jackie's design studio workbook (Jackson_Condo_Design_Studio.xlsx), converted 2026-10-31, updated 2026-11-01.
 // Reference only: not synced, edit the workbook and regenerate.
 export default {
- "source": "Jackson_Condo_Design_Studio.xlsx, from Jackie, 2026-10-31",
+ "source": "Jackson_Condo_Design_Studio.xlsx, from Jackie, updated 2026-11-01",
  "studio": {
   "brief": "Jackson's Modern Western Industrial brief. Warm wood, cognac leather, black steel and comfortable natural textures.",
   "actual": "assets/jackie/studio-00.jpg",
@@ -492,6 +492,117 @@ export default {
    "url": "https://www.wayfair.com/furniture/pdp/loon-peak-durias-4-door-sideboard-w008104968.html?piid=692835401",
    "photoUrl": "https://assets.wfcdn.com/im/41318109/resize-h1200-w1200%5Ecompr-r85/4090/409002687/Durias+Solid+Wood+Sideboard-692835401.jpg",
    "photo": "assets/jackie/p-39.jpg"
+  },
+  {
+   "id": "PB-R01",
+   "room": "Primary Bedroom",
+   "category": "Rug",
+   "name": "Aura Distressed Persian Rug",
+   "retailer": "Aura",
+   "brand": "Aura",
+   "url": "https://auramodernhome.com/products/valerie-distressed-persian-newburg-green-olive-rug",
+   "photoUrl": "https://auramodernhome.com/cdn/shop/files/0999NAVNAVYTOP.jpg?v=1783692575&width=800",
+   "photo": "assets/jackie/p-40.jpg"
+  },
+  {
+   "id": "EW-SB01",
+   "room": "Entry",
+   "category": "Storage",
+   "option": "1",
+   "name": "Reclaimed Railway Side Board",
+   "retailer": "Aura",
+   "brand": "Aura",
+   "url": "https://auramodernhome.com/products/82-reclaimed-railway-wood-sideboard-cabinet",
+   "photoUrl": "https://auramodernhome.com/cdn/shop/files/82-reclaimed-railway-wood-sideboard-bv-1037-03-by-moe-s-home-collection-image.webp?v=1780924882&width=800",
+   "photo": "assets/jackie/p-41.jpg"
+  },
+  {
+   "id": "LR-SB05",
+   "room": "Living Room",
+   "category": "Storage",
+   "name": "Canyon Ridge Leather Board Side Board",
+   "retailer": "Runyons",
+   "brand": "Runyons",
+   "url": "https://runyonsfinefurniture.com/collections/western-consoles/products/canyon-ridge-leather-drawer-side-board",
+   "photoUrl": "https://runyonsfinefurniture.com/cdn/shop/files/Front-View_Rustic-Console-table-with-Nailhead-Trim.jpg?v=1753815308&width=1800",
+   "photo": "assets/jackie/p-42.jpg"
+  },
+  {
+   "id": "DR-DT02",
+   "room": "Dining",
+   "category": "Dining table",
+   "name": "Reclaimed Oak Dining Table",
+   "retailer": "Runyons",
+   "brand": "Runyons",
+   "url": "https://runyonsfinefurniture.com/collections/western-dining-tables/products/reclaimed-oak-dining-table",
+   "photoUrl": "https://runyonsfinefurniture.com/cdn/shop/files/reclaimed-oak-dining-table-2.jpg?v=1756242564&width=1800",
+   "photo": "assets/jackie/p-43.jpg"
+  },
+  {
+   "id": "DR-DT03",
+   "room": "Dining",
+   "category": "Dining table",
+   "name": "KnottyAdler Rustic Dining Table",
+   "retailer": "Runyons",
+   "brand": "Runyons",
+   "url": "https://runyonsfinefurniture.com/collections/western-dining-tables/products/knotty-alder-rustic-dining-table",
+   "photoUrl": "https://runyonsfinefurniture.com/cdn/shop/files/knotty-alder-wood-rustic-dining-table.jpg?v=1773432034&width=1800",
+   "photo": "assets/jackie/p-44.jpg"
+  },
+  {
+   "id": "DR-DC06",
+   "room": "Dining",
+   "category": "Chair",
+   "name": "Red Dawn Rustic Dining Chair",
+   "retailer": "Runyons",
+   "brand": "Runyons",
+   "url": "https://runyonsfinefurniture.com/collections/western-dining-chairs/products/red-dawn-western-leather-dining-chair",
+   "photoUrl": "https://runyonsfinefurniture.com/cdn/shop/products/red-dawn-western-leather-desk-chair-3.jpg?v=1657523561&width=1800",
+   "photo": "assets/jackie/p-45.jpg"
+  },
+  {
+   "id": "EW-B01",
+   "room": "Entry",
+   "category": "Bench",
+   "name": "cowhid bench with shelf",
+   "retailer": "Runyons",
+   "brand": "Runyons",
+   "url": "https://runyonsfinefurniture.com/collections/western-entryway-furniture/products/pecan-brindle-cowhide-bench-with-shelf",
+   "photoUrl": "https://runyonsfinefurniture.com/cdn/shop/files/westerncowhidebenchwithshelf-9.jpg?v=1753741926&width=1800",
+   "photo": "assets/jackie/p-46.jpg"
+  },
+  {
+   "id": "EW-B02",
+   "room": "Entry",
+   "category": "Bench",
+   "name": "Cowhid bench with trunk",
+   "retailer": "Runyons",
+   "brand": "Runyons",
+   "url": "https://runyonsfinefurniture.com/collections/western-entryway-furniture/products/western-cowhide-trunk",
+   "photoUrl": "https://runyonsfinefurniture.com/cdn/shop/files/western-cowhide-storage-bench-1.png?v=1685896444&width=1800",
+   "photo": "assets/jackie/p-47.jpg"
+  },
+  {
+   "id": "LR-CT06",
+   "room": "Living Room",
+   "category": "Coffee table",
+   "name": "Copper Glance Coffee Tabl",
+   "retailer": "Runyons",
+   "brand": "Runyons",
+   "url": "https://runyonsfinefurniture.com/collections/western-coffee-tables/products/copper-glance-coffee-table",
+   "photoUrl": "https://runyonsfinefurniture.com/cdn/shop/products/image_75807585-bf1f-4e70-8451-4550a7e2ceba.png?v=1669137250&width=1080",
+   "photo": "assets/jackie/p-48.jpg"
+  },
+  {
+   "id": "LR-A",
+   "room": "Living Room",
+   "category": "Art",
+   "name": "Buffalo on White",
+   "retailer": "Runyons",
+   "brand": "Diana Whitehead",
+   "url": "https://runyonsfinefurniture.com/collections/western-wall-art/products/buffalo-on-white-canvas-art?variant=42320917528759",
+   "photoUrl": "https://runyonsfinefurniture.com/cdn/shop/files/Runyons-Oct-29-WEB-150.jpg?v=1737489971&width=1080",
+   "photo": "assets/jackie/p-49.jpg"
   }
  ],
  "versions": [
