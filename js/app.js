@@ -174,7 +174,7 @@ function togglePurchased(item, purchasedStatus = 'Ordered') {
 
 // ---------- Router ----------
 
-const ROUTES = { dashboard: viewDashboard, tasks: viewTasks, shopping: viewShopping, home: viewHome, files: viewFiles, design: viewJackie, settings: viewSettings };
+const ROUTES = { dashboard: viewDashboard, tasks: viewTasks, shopping: viewShopping, home: viewHome, files: viewFiles, design: viewJackie, art: viewArt, settings: viewSettings };
 const route = () => { const h = location.hash.slice(1) === 'jackie' ? 'design' : location.hash.slice(1); return h in ROUTES ? h : 'dashboard'; };
 
 function renderView() {
@@ -815,6 +815,79 @@ function drawQr() {
 
 // ---------- Settings ----------
 
+// ---------- Art ----------
+
+// Art photos can be a pasted image link or one of the app's own photos (assets/...).
+const artImage = (a) => (/^assets\/[\w./-]+$/.test(a.image) ? a.image : safeUrl(a.image));
+const artSize = (a) => (a.width && a.height ? `${a.width} x ${a.height} in` : '');
+
+function viewArt() {
+  const pick = M.ART_STATUSES.includes(ui.artStatus) ? ui.artStatus : '';
+  const list = state.art.filter((a) => !pick || a.status === pick).sort((a, b) => a.order - b.order);
+  const rooms = [...new Set(list.map((a) => a.room || 'No room yet'))];
+  const counts = Object.fromEntries(M.ART_STATUSES.map((st) => [st, state.art.filter((a) => a.status === st).length]));
+  return `
+  <div class="page-head"><div><h1>Art</h1><p>Pieces you are considering, buying, framing and hanging. Tap a piece to edit it.</p></div>
+    <button class="btn primary" data-act="new-art">Add art</button></div>
+  <div class="toolbar jk-filter">
+    <div class="segmented">${[['', `All (${state.art.length})`], ...M.ART_STATUSES.filter((st) => counts[st]).map((st) => [st, `${st} (${counts[st]})`])]
+    .map(([v, l]) => `<button class="${pick === v ? 'on' : ''}" data-act="art-status" data-v="${esc(v)}">${esc(l)}</button>`).join('')}</div>
+  </div>
+  ${list.length ? rooms.map((rm) => {
+    const pieces = list.filter((a) => (a.room || 'No room yet') === rm);
+    return `<section class="card jk-room">
+      <div class="card-head"><h2>${esc(rm)}</h2><span class="muted small">${pieces.length} piece${pieces.length > 1 ? 's' : ''}</span></div>
+      <div class="jk-grid">${pieces.map(artCard).join('')}</div>
+    </section>`;
+  }).join('') : empty('🖼️', pick ? `Nothing marked ${pick.toLowerCase()}.` : 'No art yet.', pick ? 'Try All.' : 'Add a piece with a link and a photo link.')}`;
+}
+
+function artCard(a) {
+  const img = artImage(a);
+  const url = safeUrl(a.url);
+  const where = [a.wall, artSize(a)].filter(Boolean).join(' · ');
+  return `<article class="jk-product art-card" data-act="edit-art" data-id="${a.id}" tabindex="0">
+    ${img ? `<img src="${esc(img)}" alt="${esc(a.title)}" loading="lazy">` : '<div class="jk-nophoto">No photo</div>'}
+    <div class="jk-body">
+      <div class="jk-meta"><span class="pill">${esc(a.status)}</span>${a.price != null ? `<span class="small"><b>${money(a.price)}</b></span>` : ''}</div>
+      <strong>${esc(a.title)}</strong>
+      ${a.artist || a.store ? `<div class="muted small">${esc([a.artist, a.store].filter(Boolean).join(' · '))}</div>` : ''}
+      ${where ? `<div class="small">${esc(where)}</div>` : ''}
+      ${a.notes ? `<div class="small muted">${esc(a.notes)}</div>` : ''}
+      ${url ? `<a class="small" href="${esc(url)}" target="_blank" rel="noopener">View listing</a>` : ''}
+    </div>
+  </article>`;
+}
+
+function openArtEditor(id) {
+  const a = id ? state.art.find((x) => x.id === id) : { ...M.createArt(), title: '' };
+  if (!a) return;
+  const roomNames = [...new Set([...state.rooms.map((r) => r.name).filter(Boolean), ...state.art.map((x) => x.room).filter(Boolean)])];
+  const m = $('#modal');
+  m.innerHTML = `<form class="modal-inner" data-form="art" data-id="${id || ''}">
+    <div class="modal-head"><h2>${id ? 'Edit art' : 'New art'}</h2><button type="button" class="icon-btn" data-act="close-modal" title="Close">${ICON.x}</button></div>
+    <div class="form-grid">
+      <label class="field full">Title<input name="title" value="${esc(a.title)}" required></label>
+      <label class="field">Artist<input name="artist" value="${esc(a.artist)}"></label>
+      <label class="field">Store<input name="store" value="${esc(a.store)}"></label>
+      <label class="field">Room<input name="room" value="${esc(a.room)}" list="art-rooms" placeholder="Living Room"><datalist id="art-rooms">${roomNames.map((r) => `<option value="${esc(r)}">`).join('')}</datalist></label>
+      <label class="field">Wall or spot<input name="wall" value="${esc(a.wall)}" placeholder="Above the sofa"></label>
+      <label class="field">Status<select name="status">${opts(M.ART_STATUSES, a.status)}</select></label>
+      <label class="field">Price<input type="number" step="0.01" min="0" name="price" value="${a.price ?? ''}"></label>
+      <label class="field">Width (in)<input type="number" step="0.25" min="0" name="width" value="${a.width ?? ''}"></label>
+      <label class="field">Height (in)<input type="number" step="0.25" min="0" name="height" value="${a.height ?? ''}"></label>
+      <label class="field full">Listing link<input name="url" value="${esc(a.url)}" placeholder="https://"></label>
+      <label class="field full">Photo link<input name="image" value="${esc(a.image)}" placeholder="https:// link to the image"></label>
+      <label class="field full">Notes<textarea name="notes">${esc(a.notes)}</textarea></label>
+    </div>
+    <div class="modal-actions">
+      ${id ? `<button type="button" class="btn ghost" data-act="delete-art" data-id="${id}" style="color:var(--danger)">Delete</button>` : ''}
+      <div class="right"><button type="button" class="btn ghost" data-act="close-modal">Cancel</button><button class="btn primary">Save</button></div>
+    </div>
+  </form>`;
+  m.showModal();
+}
+
 // ---------- Design (Jackie's design studio) ----------
 
 // Read-only view of Jackie's design studio workbook (js/jackie-data.js).
@@ -1006,6 +1079,18 @@ document.addEventListener('click', async (e) => {
     case 'shop-view': ui.shopView = el.dataset.v; saveUi(); renderView(); break;
     case 'doc-kind': ui.docKind = el.dataset.v; saveUi(); renderView(); break;
     case 'jackie-room': ui.jackieRoom = el.dataset.v; saveUi(); renderView(); break;
+    case 'art-status': ui.artStatus = el.dataset.v; saveUi(); renderView(); break;
+    case 'new-art': openArtEditor(); break;
+    case 'edit-art': if (!e.target.closest('a')) openArtEditor(id); break;
+    case 'delete-art': {
+      const a = state.art.find((x) => x.id === id);
+      $('#modal').close();
+      if (!(await confirmAction('Delete this piece?', `"${a.title}" will be removed from your art list.`, 'Delete'))) return;
+      lastDeleted = { kind: 'art', obj: a };
+      commit((s) => { s.art = s.art.filter((x) => x.id !== id); });
+      toast('Art deleted.', true);
+      break;
+    }
     case 'design-list': ui.designList = el.dataset.v; saveUi(); renderView(); break;
     case 'appt-done': commit((s) => { s.appointments.find((a) => a.id === id).status = 'Done'; }); break;
     case 'delete-appt': {
@@ -1218,6 +1303,18 @@ document.addEventListener('submit', (e) => {
         s.tasks[i] = M.createTask({ ...s.tasks[i], ...data });
       } else {
         s.tasks.push(M.createTask({ ...data, order: Math.max(-1, ...s.tasks.map((t) => t.order)) + 1 }));
+      }
+    });
+    $('#modal').close();
+    toast('Saved.');
+  } else if (kind === 'art') {
+    const id = form.dataset.id;
+    commit((s) => {
+      if (id) {
+        const i = s.art.findIndex((x) => x.id === id);
+        s.art[i] = M.createArt({ ...s.art[i], ...data });
+      } else {
+        s.art.push(M.createArt({ ...data, order: Math.max(-1, ...s.art.map((x) => x.order)) + 1 }));
       }
     });
     $('#modal').close();

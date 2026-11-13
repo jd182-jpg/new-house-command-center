@@ -16,6 +16,8 @@ export const STAIR_OPTIONS = ['Need to check', 'Yes', 'No'];
 export const DOC_KINDS = ['Estimate', 'Warranty', 'Notice', 'Receipt', 'Contract', 'Insurance', 'Manual', 'Other'];
 export const APPOINTMENT_STATUSES = ['Scheduled', 'Done', 'Canceled'];
 
+export const ART_STATUSES = ['Considering', 'To buy', 'Bought', 'Framing', 'Hung'];
+
 export const SCHEMA_VERSION = 1;
 
 let idCounter = 0;
@@ -147,6 +149,27 @@ export function createDocument(fields = {}) {
   };
 }
 
+// A piece of art: one you are considering, buying, framing or have hung.
+export function createArt(fields = {}) {
+  return {
+    id: fields.id || makeId('art'),
+    title: (fields.title || '').trim() || 'Untitled',
+    artist: fields.artist || '',
+    room: fields.room || '',
+    wall: fields.wall || '',
+    status: ART_STATUSES.includes(fields.status) ? fields.status : 'Considering',
+    price: fields.price === '' || fields.price == null ? null : num(fields.price, null),
+    width: fields.width === '' || fields.width == null ? null : num(fields.width, null),
+    height: fields.height === '' || fields.height == null ? null : num(fields.height, null),
+    url: fields.url || '',
+    image: fields.image || '',
+    store: fields.store || '',
+    notes: fields.notes || '',
+    source: fields.source || 'mine',
+    order: Number.isFinite(fields.order) ? fields.order : 0,
+  };
+}
+
 // Builds a fresh app state from the seed module.
 export function buildStateFromSeed(seed) {
   const base = normalizeState({
@@ -184,6 +207,7 @@ export function normalizeState(raw) {
     rooms: Array.isArray(raw.rooms) ? raw.rooms : [],
     appointments: Array.isArray(raw.appointments) ? raw.appointments.map(createAppointment) : [],
     documents: Array.isArray(raw.documents) ? raw.documents.map(createDocument) : [],
+    art: Array.isArray(raw.art) ? raw.art.map(createArt) : [],
     appliedUpdates: Array.isArray(raw.appliedUpdates) ? raw.appliedUpdates.filter((x) => typeof x === 'string') : [],
     // Milliseconds of the last edit. 0 means untouched seed data, so any real copy beats it.
     updatedAt: Number.isFinite(raw.updatedAt) && raw.updatedAt > 0 ? raw.updatedAt : 0,
@@ -196,7 +220,7 @@ export function normalizeState(raw) {
 // They only fill gaps: new tasks are added by id, settings are set only when blank, and
 // edits to existing tasks and items match by title or name (or a task's id) and leave deleted ones alone.
 // update: { id, settings, addTasks, editTasks: [{ title | id, set }], editItems: [{ name, set }],
-//           unboughtItemsTo, addContacts, appendNotes }
+//           unboughtItemsTo, addContacts, appendNotes, addArt }
 export function pendingUpdates(state, updates = []) {
   const done = new Set(state.appliedUpdates || []);
   return updates.filter((u) => !done.has(u.id));
@@ -232,6 +256,10 @@ export function applySeedUpdates(state, updates = []) {
       for (const c of u.addContacts) {
         if (!next.homeInfo.contacts.some((x) => x.role === c.role)) next.homeInfo.contacts.push({ ...c });
       }
+    }
+    next.art = next.art || [];
+    for (const a of u.addArt || []) {
+      if (!next.art.some((x) => x.id === a.id)) next.art.push(createArt({ ...a, order: next.art.length }));
     }
     if (u.appendNotes) {
       const cur = next.homeInfo.notes || '';

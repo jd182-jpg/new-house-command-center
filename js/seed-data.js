@@ -394,6 +394,140 @@ export const updates = [
     id: '2026-10-26-shopping-suggested',
     unboughtItemsTo: 'Suggested',
   },
+  {
+    // The Art tab starts with the art pieces from Jackie's catalog.
+    id: '2026-11-13-art-from-jackie',
+    addArt: [
+      {
+        "id": "art-dr-a01",
+        "title": "Abstract Canvas Wall Art #AP382",
+        "artist": "",
+        "room": "Dining Room",
+        "store": "Wonderartwork",
+        "url": "https://wonderartwork.com/products/abstract-canvas-wall-art-ap382",
+        "image": "assets/jackie/p-03.jpg",
+        "source": "jackie",
+        "notes": "From Jackie's catalog (DR-A01)."
+      },
+      {
+        "id": "art-dr-a02",
+        "title": "Mr. Brainwash Einstein Print",
+        "artist": "",
+        "room": "Dining Room",
+        "store": "Etsy",
+        "url": "https://www.etsy.com/listing/1865195328/einstein-love-is-the-answer-mr-brainwash?gpla=1&gao=1&utm_medium=organic&utm_custom2=21500569332&utm_source=Pinterest&utm_custom1=_k_CjwKCAjwuczWBhA9EiwAYGgEoVRBNlXNQ9YQ41luiC2atSNqlvN7zyNfuW2UzS_vpVzjAhiNX74JCRoC41UQAvD_BwE_k_&utm_content=go_21500569332_164907277083_707558291651_aud-2079782229734%3Apla-2591745577192_c__1865195328_115386815&utm_campaign=shopping_us_-art_and_collectibles_c&gad_source=1&gad_campaignid=21500569332&gbraid=0AAAAADtcfRKYuHDXUQrG_IXpHZRNGeTQ4&gclid=CjwKCAjwuczWBhA9EiwAYGgEoVRBNlXNQ9YQ41luiC2atSNqlvN7zyNfuW2UzS_vpVzjAhiNX74JCRoC41UQAvD_BwE&epik=dj0yJnU9ejVIREFpeEhmM09oUHVRQzQzV0xwYm1rQjdWOEhPRTEmcD0wJm49M3g0ZDBkTzZ4QWRPRk5MUG1xSUh2dyZ0PUFBQUFBR3JtTXlv",
+        "image": "assets/jackie/p-05.jpg",
+        "source": "jackie",
+        "notes": "From Jackie's catalog (DR-A02)."
+      },
+      {
+        "id": "art-lr-a01",
+        "title": "Vintage American Flag Canvas",
+        "artist": "",
+        "room": "Living Room",
+        "store": "Etsy",
+        "url": "https://www.etsy.com/listing/4576154771/vintage-american-flag-canvas-wall-art?gpla=1&gao=1&utm_medium=organic&utm_custom2=21500569338&utm_source=Pinterest&utm_custom1=_k_CjwKCAjwuczWBhA9EiwAYGgEobgEnn4Ju1TR15KX9lSJQ6it_y3jidqcUHq0a-pANrnVBT1XTiD4HxoCIawQAvD_BwE_k_&utm_content=go_21500569338_164907277163_707558291657_aud-2087868701483%3Apla-2591745577112_c__4576154771_12768591&utm_campaign=shopping_us_-art_and_collectibles_a&gad_source=1&gad_campaignid=21500569338&gbraid=0AAAAADtcfRLT6Y0WG_IOsZu_Xjy28x0N1&gclid=CjwKCAjwuczWBhA9EiwAYGgEobgEnn4Ju1TR15KX9lSJQ6it_y3jidqcUHq0a-pANrnVBT1XTiD4HxoCIawQAvD_BwE&epik=dj0yJnU9MnQweDF4SnpqTVB0X2xVWHNtcnY2OHZtcXVac2R2UXAmcD0wJm49NEN4T1pzVWpHNm1NWE9KX2t1MTdDUSZ0PUFBQUFBR3JtTklJ&variation0=7129472720",
+        "image": "assets/jackie/p-06.jpg",
+        "source": "jackie",
+        "notes": "From Jackie's catalog (LR-A01)."
+      },
+      {
+        "id": "art-lr-a02",
+        "title": "Buffalo Art",
+        "artist": "",
+        "room": "Living Room",
+        "store": "Etsy",
+        "url": "https://www.etsy.com/listing/1773181827/buffalo-art-print-large-buffalo-wall-art?utm_source=Pinterest&utm_medium=organic&epik=dj0yJnU9Qmx6WTg0cDJTSnpEa1g0UGN5Z3lKTG9JVDg3OUNkSkMmcD0wJm49VlUxYTJMZWMwTDMya0xKNmNrWXhhZyZ0PUFBQUFBR3JtTS1v",
+        "image": "assets/jackie/p-13.jpg",
+        "source": "jackie",
+        "notes": "From Jackie's catalog (LR-A02)."
+      },
+      {
+        "id": "art-lr-a03",
+        "title": "Tea Stained American Flag",
+        "artist": "",
+        "room": "Living Room",
+        "store": "Wayfair",
+        "url": "https://www.wayfair.com/outdoor/pdp/anley-vintage-style-tea-stained-american-us-flag-3x5-foot-nylon-antiqued-usa-banner-flags-yena1288.html",
+        "image": "assets/jackie/p-16.jpg",
+        "source": "jackie",
+        "notes": "From Jackie's catalog (LR-A03)."
+      },
+      {
+        "id": "art-lr-a04",
+        "title": "Pop Art Cowboy",
+        "artist": "Wolozsyk Artworks",
+        "room": "Living Room",
+        "store": "Etsy",
+        "url": "https://www.etsy.com/listing/1782194523/pop-art-cowboy-closeup-acrylic-wall-art?variation0=4709599430&variation1=4713054023",
+        "image": "assets/jackie/p-27.jpg",
+        "source": "jackie",
+        "notes": "From Jackie's catalog (LR-A04)."
+      },
+      {
+        "id": "art-lr-a05",
+        "title": "Pop Art Cowboy (second version)",
+        "artist": "Wolozsyk Artworks",
+        "room": "Living Room",
+        "store": "Etsy",
+        "url": "https://www.etsy.com/listing/1782197407/pop-art-cowboy-closeup-acrylic-wall-art?ls=r&external=1&rec_type=ss&ref=landingpage_similar_listing_top-8&sr_prefetch=0&pf_from=listing_non_ule&pro=1&content_source=458911b8adfb3812e2accba48dd6a069%253ALTee1261582622e749702a09868e900bdc0eb560d2&logging_key=458911b8adfb3812e2accba48dd6a069%3ALTee1261582622e749702a09868e900bdc0eb560d2&variation1=4713069169",
+        "image": "assets/jackie/p-28.jpg",
+        "source": "jackie",
+        "notes": "From Jackie's catalog (LR-A05)."
+      },
+      {
+        "id": "art-lr-a06",
+        "title": "Andy Warhol- John Wayne Print",
+        "artist": "Printstory Gallery",
+        "room": "Living Room",
+        "store": "Ebay",
+        "url": "https://www.ebay.com/itm/305740141255?var=604814965708",
+        "image": "assets/jackie/p-29.jpg",
+        "source": "jackie",
+        "notes": "From Jackie's catalog (LR-A06)."
+      },
+      {
+        "id": "art-lr-a",
+        "title": "Buffalo on White",
+        "artist": "Diana Whitehead",
+        "room": "Living Room",
+        "store": "Runyons",
+        "price": 1100,
+        "url": "https://runyonsfinefurniture.com/collections/western-wall-art/products/buffalo-on-white-canvas-art?variant=42320917528759",
+        "image": "assets/jackie/p-49.jpg",
+        "source": "jackie",
+        "notes": "From Jackie's catalog (LR-A)."
+      }
+    ],
+  },
+  {
+    // Two Michael Snodgrass originals Jackson sent on 2026-11-13.
+    id: '2026-11-13-art-snodgrass',
+    addArt: [
+      {
+        id: 'art-snodgrass-fish-story',
+        title: 'Fish Story',
+        artist: 'Michael Snodgrass',
+        store: 'Michael Snodgrass Art',
+        width: 24,
+        height: 32,
+        url: 'https://www.msnodgrassart.com/figures?itemId=6pk6zt2idwgdfpyhp3zckyt4t4twla',
+        image: 'assets/art/snodgrass-fish-story.jpg',
+        notes: 'Original, acrylic on panel. Price not listed on the site.',
+      },
+      {
+        id: 'art-snodgrass-wine-critic',
+        title: 'Wine Critic with Dodgy Palette',
+        artist: 'Michael Snodgrass',
+        store: 'Michael Snodgrass Art',
+        width: 32,
+        height: 42,
+        url: 'https://www.msnodgrassart.com/figures?itemId=v32piup4y349eduwxgv1si85tk86r2',
+        image: 'assets/art/snodgrass-wine-critic.jpg',
+        notes: 'Original, acrylic on panel. Price not listed on the site.',
+      },
+    ],
+  },
 ];
 
 export default { rooms, settings, tasks, items, homeInfo, updates };

@@ -5,7 +5,7 @@ import {
   createItem, createTask, buildStateFromSeed, normalizeState, budgetSummary, roomSummaries,
   itemTotal, effectiveUnitPrice, taskProgress, shoppingProgress, overallProgress, doNext,
   daysUntil, isOverdue, reorder, fitCheck, stairWarning, wifiQrPayload, TASK_CATEGORIES, applySeedUpdates,
-  reconcile, stampUpdated, toSyncPayload, SECRET_HOME_KEYS,
+  reconcile, stampUpdated, toSyncPayload, SECRET_HOME_KEYS, createArt, ART_STATUSES,
 } from '../js/model.js';
 
 const NOW = new Date(2026, 9, 17); // Oct 17 2026, local time
@@ -355,4 +355,20 @@ test('the shopping reset sends every unbought item to Suggested and keeps bought
   const { state: next } = applySeedUpdates(state, [{ id: 'u', unboughtItemsTo: 'Suggested' }]);
   assert.deepEqual(next.items.map((i) => i.status), ['Suggested', 'Placed']);
   assert.equal(next.items[0].brand, 'X');
+});
+
+test('art: seed adds Jackie art once, normalize keeps it, bad status falls back', () => {
+  const s = buildStateFromSeed(seed);
+  assert.ok(s.art.length >= 9);
+  assert.ok(s.art.every((a) => ART_STATUSES.includes(a.status) && a.image));
+  const again = applySeedUpdates(s, seed.updates);
+  assert.equal(again.changed, false);
+  const kept = normalizeState(JSON.parse(JSON.stringify(s)));
+  assert.equal(kept.art.length, s.art.length);
+  const a = createArt({ title: ' Print ', status: 'Nope', price: '250', width: '' });
+  assert.equal(a.title, 'Print');
+  assert.equal(a.status, 'Considering');
+  assert.equal(a.price, 250);
+  assert.equal(a.width, null);
+  assert.deepEqual(normalizeState({ tasks: [], items: [] }).art, []);
 });
