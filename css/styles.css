@@ -409,6 +409,8 @@ details.past summary { cursor: pointer; }
 .jk-filter .segmented { flex-wrap: wrap; }
 .jk-room { margin-bottom: 16px; }
 .jk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-bottom: 8px; }
+.jk-type { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 14px 0 8px; }
+.jk-filter + .jk-filter { margin-top: -4px; }
 .jk-product { border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; background: var(--surface); display: flex; flex-direction: column; }
 .jk-product img, .jk-nophoto { width: 100%; aspect-ratio: 1; object-fit: contain; background: #fff; display: block; }
 .jk-nophoto { display: grid; place-items: center; color: var(--muted); font-size: 13px; background: var(--surface-2); }

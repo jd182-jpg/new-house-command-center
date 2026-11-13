@@ -5,6 +5,7 @@ import { loadState, saveState, resetToSeed, exportJSON, importJSON } from './sto
 import { startSync } from './sync.js';
 import seed from './seed-data.js';
 import jackie from './jackie-data.js';
+import rh from './rh-data.js';
 import { FIREBASE_CONFIG, COLLECTION, DOC_ID } from './sync-config.js';
 
 const SYNC_ON = !!(FIREBASE_CONFIG && FIREBASE_CONFIG.projectId);
@@ -833,12 +834,42 @@ function jackieProduct(p) {
   </article>`;
 }
 
+
+function rhProduct(p) {
+  const url = safeUrl(p.url);
+  return `<article class="jk-product">
+    ${p.photo ? `<img src="${esc(p.photo)}" alt="${esc(p.name)}" loading="lazy">` : '<div class="jk-nophoto">No photo</div>'}
+    <div class="jk-body">
+      <div class="jk-meta"><span class="pill">${esc(p.type || 'Other')}</span>${p.price != null ? `<span class="small"><b>${money(p.price)}</b></span>` : ''}</div>
+      <strong>${esc(p.name)}</strong>
+      ${p.retailer ? `<div class="muted small">${esc(p.retailer)}</div>` : ''}
+      ${p.finish ? `<div class="small"><b>Finish:</b> ${esc(p.finish)}</div>` : ''}
+      ${p.notes ? `<div class="small muted">${esc(p.notes)}</div>` : ''}
+      ${p.priceNote ? `<div class="small muted">${esc(p.priceNote)}</div>` : ''}
+      ${p.choice ? `<div class="small"><b>Your choice:</b> ${esc(p.choice)}</div>` : ''}
+      ${url ? `<a class="small" href="${esc(url)}" target="_blank" rel="noopener">View product</a>` : ''}
+    </div>
+  </article>`;
+}
+
+function viewRhOptions(pick) {
+  return rh.rooms.filter((r) => !pick || r.room === pick).map((r) => {
+    const types = [...new Set(r.items.map((p) => p.type || 'Other'))];
+    return `<section class="card jk-room">
+      <div class="card-head"><h2>${esc(r.room)}</h2><span class="muted small">${r.items.length} options</span></div>
+      ${types.map((t) => `<h3 class="jk-type">${esc(t)}</h3><div class="jk-grid">${r.items.filter((p) => (p.type || 'Other') === t).map(rhProduct).join('')}</div>`).join('')}
+    </section>`;
+  }).join('');
+}
+
 function viewJackie() {
   const J = jackie;
-  const rooms = [...new Set(J.products.map((p) => p.room))];
+  const showRh = ui.designList !== 'jackie';
+  const rooms = showRh ? rh.rooms.map((r) => r.room) : [...new Set(J.products.map((p) => p.room))];
   const pick = rooms.includes(ui.jackieRoom) ? ui.jackieRoom : '';
   const list = J.products.filter((p) => !pick || p.room === pick);
-  const byRoom = rooms.filter((rm) => !pick || rm === pick).map((rm) => {
+  const rhCount = rh.rooms.reduce((n, r) => n + r.items.length, 0);
+  const byRoom = showRh ? viewRhOptions(pick) : rooms.filter((rm) => !pick || rm === pick).map((rm) => {
     const items = list.filter((p) => p.room === rm);
     const order = [...new Set(items.map((p) => p.category))];
     items.sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category) || Number(a.option) - Number(b.option));
@@ -850,7 +881,7 @@ function viewJackie() {
   const prodName = (id) => (J.products.find((p) => p.id === id) || {}).name;
   const st = J.studio;
   return `
-  <div class="page-head"><div><h1>Design</h1><p>Jackie's design studio: ${J.products.length} product options, design versions and room notes.</p></div></div>
+  <div class="page-head"><div><h1>Design</h1><p>RH options by room and Jackie's design studio: ${rhCount + J.products.length} product options, design versions and room notes.</p></div></div>
 
   <section class="card">
     <div class="card-head"><h2>Living room studio</h2></div>
@@ -863,6 +894,9 @@ function viewJackie() {
     <div class="callout small">${esc(st.next)}</div>
   </section>
 
+  <div class="toolbar jk-filter">
+    <div class="segmented">${[['rh', `RH options by room (${rhCount})`], ['jackie', `Jackie's catalog (${J.products.length})`]].map(([v, l]) => `<button class="${(showRh ? 'rh' : 'jackie') === v ? 'on' : ''}" data-act="design-list" data-v="${v}">${esc(l)}</button>`).join('')}</div>
+  </div>
   <div class="toolbar jk-filter">
     <div class="segmented">${[['', 'All rooms'], ...rooms.map((rm) => [rm, rm])].map(([v, l]) => `<button class="${pick === v ? 'on' : ''}" data-act="jackie-room" data-v="${esc(v)}">${esc(l)}</button>`).join('')}</div>
   </div>
@@ -972,6 +1006,7 @@ document.addEventListener('click', async (e) => {
     case 'shop-view': ui.shopView = el.dataset.v; saveUi(); renderView(); break;
     case 'doc-kind': ui.docKind = el.dataset.v; saveUi(); renderView(); break;
     case 'jackie-room': ui.jackieRoom = el.dataset.v; saveUi(); renderView(); break;
+    case 'design-list': ui.designList = el.dataset.v; saveUi(); renderView(); break;
     case 'appt-done': commit((s) => { s.appointments.find((a) => a.id === id).status = 'Done'; }); break;
     case 'delete-appt': {
       const a = state.appointments.find((x) => x.id === id);
