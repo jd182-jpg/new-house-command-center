@@ -372,3 +372,15 @@ test('art: seed adds Jackie art once, normalize keeps it, bad status falls back'
   assert.equal(a.width, null);
   assert.deepEqual(normalizeState({ tasks: [], items: [] }).art, []);
 });
+
+test('art: ARTDECOR update adds pieces and only fills blank prices', () => {
+  const s = buildStateFromSeed(seed);
+  assert.equal(s.art.find((a) => a.id === 'art-lr-a02').price, 44);
+  assert.ok(s.art.some((a) => a.id === 'art-runyons-lone-star-mirror' && a.price === 1500));
+  const before = JSON.parse(JSON.stringify(s));
+  before.art.find((a) => a.id === 'art-lr-a02').price = 60;
+  before.appliedUpdates = before.appliedUpdates.filter((id) => id !== '2026-11-13-art-decor-sheet');
+  const after = applySeedUpdates(before, seed.updates).state;
+  assert.equal(after.art.find((a) => a.id === 'art-lr-a02').price, 60);
+  assert.equal(after.art.filter((a) => a.id === 'art-lr-ac02').length, 1);
+});

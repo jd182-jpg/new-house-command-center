@@ -220,7 +220,7 @@ export function normalizeState(raw) {
 // They only fill gaps: new tasks are added by id, settings are set only when blank, and
 // edits to existing tasks and items match by title or name (or a task's id) and leave deleted ones alone.
 // update: { id, settings, addTasks, editTasks: [{ title | id, set }], editItems: [{ name, set }],
-//           unboughtItemsTo, addContacts, appendNotes, addArt }
+//           unboughtItemsTo, addContacts, appendNotes, addArt, editArt: [{ id, set }] }
 export function pendingUpdates(state, updates = []) {
   const done = new Set(state.appliedUpdates || []);
   return updates.filter((u) => !done.has(u.id));
@@ -260,6 +260,10 @@ export function applySeedUpdates(state, updates = []) {
     next.art = next.art || [];
     for (const a of u.addArt || []) {
       if (!next.art.some((x) => x.id === a.id)) next.art.push(createArt({ ...a, order: next.art.length }));
+    }
+    for (const { id, set } of u.editArt || []) {
+      const a = next.art.find((x) => x.id === id);
+      if (a) Object.assign(a, setOrFill(a, set));
     }
     if (u.appendNotes) {
       const cur = next.homeInfo.notes || '';

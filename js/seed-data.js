@@ -528,6 +528,57 @@ export const updates = [
       },
     ],
   },
+  {
+    // The ARTDECOR sheet of "Jackson - RH Options by Room": four new pieces, and prices for
+    // the catalog art (filled only where no price is set yet).
+    id: '2026-11-13-art-decor-sheet',
+    addArt: [
+      {
+        id: 'art-itw-texas-flag-longhorn',
+        title: 'Texas Flag Longhorn Skull',
+        store: 'Into the West',
+        room: 'Living Room or Bedroom',
+        price: 499,
+        url: 'https://itwhome.com/products/texas-flag-longhorn-skull-wall-mount',
+        image: 'assets/art/texas-flag-longhorn-skull.jpg',
+        notes: 'Wall mount. From the ARTDECOR sheet.',
+      },
+      {
+        id: 'art-itw-hair-on-hide-longhorn',
+        title: 'Hair-on-Hide Longhorn Skull',
+        store: 'Into the West',
+        room: 'Living Room or Bedroom',
+        price: 449,
+        url: 'https://itwhome.com/products/hair-on-hide-longhorn-skull-wall-mount',
+        image: 'assets/art/hair-on-hide-longhorn-skull.jpg',
+        notes: 'Brown longhorn wall mount. From the ARTDECOR sheet.',
+      },
+      {
+        id: 'art-lr-ac02',
+        title: 'Abstract Blue Knot Sculpture',
+        artist: 'Quianling',
+        store: 'Amazon',
+        room: 'Living Room',
+        url: 'https://www.amazon.com/dp/B0GDPNBF9G',
+        image: 'assets/art/blue-knot-sculpture.jpg',
+        notes: 'Tabletop sculpture (LR-AC02). Price not in the sheet.',
+      },
+      {
+        id: 'art-runyons-lone-star-mirror',
+        title: 'Texas Lone Star Steer Mirror',
+        store: 'Runyons',
+        room: 'Entry or Bedroom',
+        price: 1500,
+        url: 'https://runyonsfinefurniture.com/collections/high-end-western-mirrors/products/texas-lone-star-steer-mirror',
+        image: 'assets/art/texas-lone-star-mirror.jpg',
+        notes: 'Wall mirror. From the ARTDECOR sheet.',
+      },
+    ],
+    editArt: [
+      ['art-lr-a', 1100], ['art-lr-a02', 44], ['art-lr-a03', 30], ['art-lr-a04', 550],
+      ['art-lr-a05', 584], ['art-dr-a01', 579], ['art-dr-a02', 100], ['art-lr-a01', 1000],
+    ].map(([id, price]) => ({ id, set: { 'price?': price } })),
+  },
 ];
 
 export default { rooms, settings, tasks, items, homeInfo, updates };
