@@ -566,7 +566,7 @@ export function formatMoney(n, { cents = false } = {}) {
 // The only part of homeInfo touched is the contact list, so Wi-Fi passwords can't be.
 
 export const TEXT_OP_KINDS = ['updateTask', 'addTask', 'updateItem', 'addItem', 'setDates',
-  'addAppointment', 'updateAppointment', 'addDocument', 'addContact'];
+  'addAppointment', 'updateAppointment', 'addDocument', 'addContact', 'addArt', 'updateArt'];
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -614,6 +614,11 @@ export function describeForParser(state) {
   if (appts.length) {
     lines.push('', 'APPOINTMENTS (id | status | date | time | who | title)',
       ...appts.map((a) => `${a.id} | ${a.status} | ${a.date || '-'} | ${a.start || '-'} | ${a.who || '-'} | ${a.title}`));
+  }
+  const art = state.art || [];
+  if (art.length) {
+    lines.push('', 'ART (id | status | room | artist | title)',
+      ...art.map((a) => `${a.id} | ${a.status} | ${a.room || '-'} | ${a.artist || '-'} | ${a.title}`));
   }
   const docs = state.documents || [];
   if (docs.length) {
@@ -805,6 +810,52 @@ export function applyTextOps(state, ops) {
         d.expires ? `expires ${shortDate(d.expires)}` : '', d.files.length ? `${d.files.length} file${d.files.length === 1 ? '' : 's'}` : '',
         on ? `linked to '${on}'` : ''].filter(Boolean);
       parts.push(`Filed '${d.title}' (${bits.join(', ')})`);
+      continue;
+    }
+
+    if (op.kind === 'addArt' || op.kind === 'updateArt') {
+      let status = null;
+      if (has(op, 'status')) {
+        status = pickEnum(ART_STATUSES, op.status);
+        if (!status) return fail(`"${op.status}" isn't an art status. Use ${ART_STATUSES.join(', ')}.`);
+      }
+      for (const k of ['url', 'image']) if (has(op, k) && !validUrl(op[k])) return fail(`"${op[k]}" isn't a web link.`);
+      const nums = {};
+      for (const [k, label] of [['price', 'a price'], ['width', 'a width'], ['height', 'a height']]) {
+        if (!has(op, k)) continue;
+        nums[k] = num(op[k], null);
+        if (nums[k] == null || nums[k] < 0) return fail(`"${op[k]}" isn't ${label}.`);
+      }
+      next.art = next.art || [];
+      let a;
+      const bits = [];
+      if (op.kind === 'updateArt') {
+        a = next.art.find((x) => x.id === op.artId);
+        if (!a) return fail("I couldn't tell which piece of art you meant, so nothing changed.");
+      } else {
+        const title = String(op.title || '').trim();
+        if (!title) return fail('New art needs a title.');
+        if (next.art.some((x) => sameName(x.title, title))) return fail(`'${title}' is already in your art. Say what to change about it instead.`);
+        a = createArt({ title, source: 'mine', order: Math.max(-1, ...next.art.map((x) => x.order)) + 1 });
+        next.art.push(a);
+      }
+      if (status) { a.status = status; bits.push(status); }
+      for (const k of ['artist', 'store', 'wall']) if (has(op, k)) { a[k] = String(op[k]).trim(); bits.push(a[k]); }
+      if (has(op, 'room')) {
+        const room = String(op.room).trim();
+        a.room = (next.rooms.find((r) => sameName(r.name, room)) || {}).name || room;
+        bits.push(a.room);
+      }
+      if (has(nums, 'price')) { a.price = nums.price; bits.push(formatMoney(nums.price, { cents: nums.price % 1 !== 0 })); }
+      if (has(nums, 'width')) a.width = nums.width;
+      if (has(nums, 'height')) a.height = nums.height;
+      if (has(nums, 'width') || has(nums, 'height')) bits.push(`${a.width ?? '?'} x ${a.height ?? '?'} in`);
+      if (has(op, 'url')) { a.url = op.url; bits.push('link saved'); }
+      if (has(op, 'image')) { a.image = op.image; bits.push('photo saved'); }
+      if (has(op, 'notes')) { a.notes = a.notes ? `${a.notes}\n${op.notes}` : String(op.notes); bits.push('note added'); }
+      if (op.kind === 'addArt') parts.push(`Added art '${a.title}'${bits.length ? ` (${bits.join(', ')})` : ''}`);
+      else if (!bits.length) return fail(`I found '${a.title}' but not what to change.`);
+      else parts.push(`${status ? 'Marked' : 'Updated'} art '${a.title}' ${bits.join(', ')}`);
       continue;
     }
 

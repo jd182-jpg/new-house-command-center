@@ -213,3 +213,26 @@ test('a brand or link moves a suggestion to To purchase; notes alone do not', ()
   r = applyTextOps(s, [{ kind: 'updateItem', itemId: other.id, url: 'https://example.com/x', status: 'Ordered' }]);
   assert.equal(item(r.state, other.name).status, 'Ordered', 'an explicit status wins');
 });
+
+test('art: add with details, update status and room, reject bad input', () => {
+  const s = buildStateFromSeed(seed);
+  const add = applyTextOps(s, [{ kind: 'addArt', title: 'Fish Story II', artist: 'Michael Snodgrass', room: 'bedroom', price: 2400, width: 24, height: 32, url: 'https://www.msnodgrassart.com/figures' }]);
+  assert.equal(add.ok, true, add.message);
+  const a = add.state.art.find((x) => x.title === 'Fish Story II');
+  assert.equal(a.room, 'Bedroom');
+  assert.equal(a.status, 'Considering');
+  assert.equal(a.price, 2400);
+  assert.equal(a.height, 32);
+  assert.match(add.summary, /Added art 'Fish Story II'/);
+  const upd = applyTextOps(add.state, [{ kind: 'updateArt', artId: a.id, status: 'hung', wall: 'Above the bed', notes: 'Framed in walnut' }]);
+  assert.equal(upd.ok, true, upd.message);
+  const b = upd.state.art.find((x) => x.id === a.id);
+  assert.equal(b.status, 'Hung');
+  assert.equal(b.wall, 'Above the bed');
+  assert.match(upd.summary, /Marked art 'Fish Story II' Hung/);
+  assert.equal(applyTextOps(add.state, [{ kind: 'addArt', title: 'fish story ii' }]).ok, false);
+  assert.equal(applyTextOps(s, [{ kind: 'updateArt', artId: 'nope', status: 'Hung' }]).ok, false);
+  assert.equal(applyTextOps(s, [{ kind: 'addArt', title: 'X', status: 'Sold' }]).ok, false);
+  assert.equal(applyTextOps(s, [{ kind: 'addArt', title: 'Y', url: 'not a link' }]).ok, false);
+  assert.match(describeForParser(add.state), /ART \(id \| status \| room \| artist \| title\)[\s\S]*Fish Story II/);
+});

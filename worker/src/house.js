@@ -2,7 +2,7 @@
 // index.js wires in the real fetch and the Claude call.
 import { safeFolder, fileNameFor, NEW_FOLDERS } from './onedrive.js';
 import { applyTextOps, describeForParser, normalizeState, stampUpdated, TASK_CATEGORIES, TASK_STATUSES,
-  ITEM_STATUSES, ITEM_PRIORITIES, TASK_PRIORITIES } from '../../js/model.js';
+  ITEM_STATUSES, ITEM_PRIORITIES, TASK_PRIORITIES, ART_STATUSES } from '../../js/model.js';
 
 export const MAX_MESSAGE = 1000;
 // Forwarded emails are long; this caps what goes to the parser.
@@ -12,7 +12,7 @@ export const MAX_FORWARD = 40000;
 // produces a question instead of a guess. One id, name and date field serve every kind;
 // toModelOps maps them onto the ops in js/model.js.
 export const PARSER_KINDS = ['updateTask', 'addTask', 'updateItem', 'addItem', 'setClosingDate', 'setMoveInDate',
-  'addAppointment', 'updateAppointment', 'addDocument', 'addContact'];
+  'addAppointment', 'updateAppointment', 'addDocument', 'addContact', 'addArt', 'updateArt'];
 
 const str = { type: 'string' };
 // Input schema for the apply_changes tool. Structured outputs rejected an earlier, smaller
@@ -39,6 +39,10 @@ export const OPS_SCHEMA = {
           who: str, phone: str, email: str, location: str, role: str,
           docKind: { type: 'string', description: 'Estimate, Warranty, Notice, Receipt, Contract, Insurance, Manual or Other' },
           vendor: str, amount: { type: 'number' },
+          artist: str, wall: str, image: { type: 'string', description: 'Art only: a direct link to a photo of the piece' },
+          price: { type: 'number', description: 'Art only: the price' },
+          width: { type: 'number', description: 'Art only: width in inches' },
+          height: { type: 'number', description: 'Art only: height in inches' },
           expires: { type: 'string', description: 'YYYY-MM-DD' },
           summary: str,
           taskId: { type: 'string', description: 'Link to this task id' },
@@ -77,13 +81,15 @@ export function toModelOps(ops) {
       case 'updateAppointment': return { kind, appointmentId: id, date, ...rest };
       case 'addDocument': return { kind, title: name, date, ...rest };
       case 'addContact': return { kind, name, ...rest };
+      case 'addArt': return { kind, title: name, ...rest };
+      case 'updateArt': return { kind, artId: id, ...rest };
       default: return { kind };
     }
   });
 }
 
 export const SYSTEM_PROMPT = `You turn a message from Jackson into edits to his move-in tracker for 2608 Montrose Blvd, Houston.
-The user turn holds his current tasks, shopping items, appointments and documents (each with an id), today's date, and his message. A message is either a short text, or a forwarded email (with any attachments) and maybe a note from him on top.
+The user turn holds his current tasks, shopping items, art, appointments and documents (each with an id), today's date, and his message. A message is either a short text, or a forwarded email (with any attachments) and maybe a note from him on top.
 
 When there is something to change, call apply_changes once with all the ops. When the message is unclear, do not call the tool: reply with one short question instead.
 
@@ -97,6 +103,8 @@ Op kinds (leave out every field he did not mention):
 - updateAppointment: id plus the fields that changed. A reschedule changes date and times; a cancellation sets status Canceled.
 - addDocument: name (short title), docKind, vendor, amount (the total, as a number), date (the document's date), expires (warranty or policy end), summary (one or two sentences: scope, key terms, what he must do), taskId or itemId when it clearly belongs to one, saveFiles.
 - addContact: name (business or person), role (what they do for the house), phone, email. Only for businesses or people working on the house, not marketing senders.
+- addArt: name (the artwork's title), optional artist, store (gallery or shop), room, wall (where it goes, like "above the sofa"), status (${ART_STATUSES.join(', ')}), price, width and height (inches; a listing's "32 x 24" is height x width for a portrait piece), url (the listing link), image (a direct photo link, only if he gives one), notes. Art, prints, paintings and photos go here, not in shopping items.
+- updateArt: id plus the fields that changed. "bought/ordered" means Bought, "at the framer" Framing, "hung/up on the wall" Hung.
 
 Rules:
 - Use only ids that appear in the listing. Match loosely on meaning ("the Frame TV" is "Samsung The Frame Pro"; calling CenterPoint is about gas service).
@@ -107,11 +115,13 @@ Rules:
   - If it asks him to do or pay something by a date: addTask with that due date, unless a task already covers it (then updateTask).
   - An order or shipping confirmation for something on his list: updateItem.
   - New businesses working on the house: addContact.
+  - A receipt or confirmation for art on his list: updateArt (status Bought) plus addDocument.
   - His note on top wins over your own reading. If nothing in it is about the house, don't call the tool and say so.
 - Folders for saveFiles: pick the best fit from the folder list in the user turn. Estimates and quotes go in "04 Quotes and Estimates", HOA items in "03 HOA", contractor paperwork in "07 Renovation and Contractors/<company>", closing and title papers in "01 Contract and Closing", warranties, manuals and receipts in "08 Warranties and Receipts", utility and service accounts in "09 Utilities and Services". Use "00 Inbox" when unsure.
 - File names: "YYYY-MM-DD Vendor - what it is", using the document's own date, no extension.
 - Dates are YYYY-MM-DD. Resolve "Nov 22", "Friday", "tomorrow" against today's date, in the future.
 - Never invent prices, stores, order numbers, dates or phone numbers.
+- You cannot open links. If he sends only a link for new art and the title is not in the message or the link text, ask for the title.
 - No em dashes.`;
 
 // Today in Houston, as YYYY-MM-DD plus the weekday.

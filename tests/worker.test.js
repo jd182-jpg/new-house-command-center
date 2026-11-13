@@ -328,3 +328,20 @@ test('email: too-big emails get a clear reply instead of being read', async () =
   assert.match(t, /saved the whole email, attachments included, to 2608-Montrose-Blvd\/00 Inbox\/2026-10-26 Hot Water Guys/);
   assert.match(tooBigText(300 * 1024, null), /couldn't save a copy/);
 });
+
+test('parser art ops map onto model ops and apply', async () => {
+  const { applyTextOps } = await import('../js/model.js');
+  const ops = toModelOps([
+    { kind: 'addArt', name: 'Wine Critic II', artist: 'Michael Snodgrass', price: 3000, width: 32, height: 42 },
+    { kind: 'updateArt', id: 'art-lr-a', status: 'Bought' },
+  ]);
+  assert.deepEqual(ops, [
+    { kind: 'addArt', title: 'Wine Critic II', artist: 'Michael Snodgrass', price: 3000, width: 32, height: 42 },
+    { kind: 'updateArt', artId: 'art-lr-a', status: 'Bought' },
+  ]);
+  const r = applyTextOps(buildStateFromSeed(seed), ops);
+  assert.equal(r.ok, true, r.message);
+  assert.equal(r.state.art.find((a) => a.id === 'art-lr-a').status, 'Bought');
+  assert.ok(r.state.art.some((a) => a.title === 'Wine Critic II' && a.width === 32));
+  for (const k of ['artist', 'wall', 'image', 'price', 'width', 'height']) assert.ok(OPS_SCHEMA.properties.ops.items.properties[k], k);
+});
