@@ -581,4 +581,13 @@ export const updates = [
   },
 ];
 
+// A device still running a copy of the app from before the Art tab marked the art updates done
+// but dropped the art itself. This re-adds any art piece that is missing (by id) and fills
+// blank prices again; pieces already there are left as they are.
+updates.push({
+  id: '2026-11-13-art-restore',
+  addArt: updates.flatMap((u) => u.addArt || []),
+  editArt: updates.flatMap((u) => u.editArt || []),
+});
+
 export default { rooms, settings, tasks, items, homeInfo, updates };

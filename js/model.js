@@ -191,7 +191,11 @@ export function normalizeState(raw) {
     throw new Error('Backup is missing tasks or items.');
   }
   const settings = raw.settings || {};
+  // Fields a newer version of the app added are carried along untouched, so an older copy
+  // of the app can't drop them when it saves.
+  const extra = Object.fromEntries(Object.entries(raw).filter(([k]) => !KNOWN_STATE_KEYS.includes(k)));
   return {
+    ...extra,
     version: SCHEMA_VERSION,
     settings: {
       closingDate: settings.closingDate || '',
@@ -214,6 +218,9 @@ export function normalizeState(raw) {
   };
 }
 
+const KNOWN_STATE_KEYS = ['version', 'settings', 'tasks', 'items', 'homeInfo', 'rooms', 'appointments',
+  'documents', 'art', 'appliedUpdates', 'updatedAt'];
+
 // ---------- Seed updates ----------
 
 // Seed updates deliver new facts to data you are already using, once per update id.
@@ -221,9 +228,14 @@ export function normalizeState(raw) {
 // edits to existing tasks and items match by title or name (or a task's id) and leave deleted ones alone.
 // update: { id, settings, addTasks, editTasks: [{ title | id, set }], editItems: [{ name, set }],
 //           unboughtItemsTo, addContacts, appendNotes, addArt, editArt: [{ id, set }] }
+// The parts of a seed update this version knows how to apply. An update with anything else
+// is left pending (not marked done), so a newer copy of the app applies it in full later.
+const SEED_UPDATE_KEYS = ['id', 'settings', 'addTasks', 'editTasks', 'unboughtItemsTo', 'editItems',
+  'addContacts', 'appendNotes', 'addArt', 'editArt'];
+
 export function pendingUpdates(state, updates = []) {
   const done = new Set(state.appliedUpdates || []);
-  return updates.filter((u) => !done.has(u.id));
+  return updates.filter((u) => !done.has(u.id) && Object.keys(u).every((k) => SEED_UPDATE_KEYS.includes(k)));
 }
 
 export function applySeedUpdates(state, updates = []) {

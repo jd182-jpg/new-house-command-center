@@ -384,3 +384,25 @@ test('art: ARTDECOR update adds pieces and only fills blank prices', () => {
   assert.equal(after.art.find((a) => a.id === 'art-lr-a02').price, 60);
   assert.equal(after.art.filter((a) => a.id === 'art-lr-ac02').length, 1);
 });
+
+test('art: restore update brings back art an old app copy dropped', () => {
+  const s = buildStateFromSeed(seed);
+  const total = s.art.length;
+  const broken = JSON.parse(JSON.stringify(s));
+  broken.art = broken.art.filter((a) => a.id.startsWith('art-itw') || a.id === 'art-lr-ac02' || a.id === 'art-runyons-lone-star-mirror');
+  broken.art[0].status = 'Bought';
+  broken.appliedUpdates = broken.appliedUpdates.filter((id) => id !== '2026-11-13-art-restore');
+  const fixed = applySeedUpdates(broken, seed.updates).state;
+  assert.equal(fixed.art.length, total);
+  assert.equal(fixed.art.find((a) => a.id === broken.art[0].id).status, 'Bought');
+  assert.equal(fixed.art.find((a) => a.id === 'art-lr-a02').price, 44);
+});
+
+test('state keeps fields from a newer app, and unknown seed update parts stay pending', () => {
+  const s = buildStateFromSeed(seed);
+  const kept = normalizeState({ ...JSON.parse(JSON.stringify(s)), futureList: [{ a: 1 }] });
+  assert.deepEqual(kept.futureList, [{ a: 1 }]);
+  const r = applySeedUpdates(s, [{ id: 'later-feature', addWidgets: [{ id: 'w1' }] }]);
+  assert.equal(r.changed, false);
+  assert.ok(!r.state.appliedUpdates.includes('later-feature'));
+});
