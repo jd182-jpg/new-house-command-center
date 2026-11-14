@@ -409,6 +409,8 @@ details.past summary { cursor: pointer; }
 .jk-filter .segmented { flex-wrap: wrap; }
 .jk-room { margin-bottom: 16px; }
 .jk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-bottom: 8px; }
+.rh-total { font-size: 28px; font-weight: 700; color: var(--heading); margin: 2px 0 8px; }
+.rh-final { color: var(--danger); font-weight: 600; }
 .art-card { cursor: pointer; }
 .art-card:hover { border-color: var(--accent); }
 .jk-type { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 14px 0 8px; }

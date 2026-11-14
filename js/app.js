@@ -6,6 +6,7 @@ import { startSync } from './sync.js';
 import seed from './seed-data.js';
 import jackie from './jackie-data.js';
 import rh from './rh-data.js';
+import rhQuote from './rh-quote-data.js';
 import { FIREBASE_CONFIG, COLLECTION, DOC_ID } from './sync-config.js';
 
 const SYNC_ON = !!(FIREBASE_CONFIG && FIREBASE_CONFIG.projectId);
@@ -174,7 +175,7 @@ function togglePurchased(item, purchasedStatus = 'Ordered') {
 
 // ---------- Router ----------
 
-const ROUTES = { dashboard: viewDashboard, tasks: viewTasks, shopping: viewShopping, home: viewHome, files: viewFiles, design: viewJackie, art: viewArt, settings: viewSettings };
+const ROUTES = { dashboard: viewDashboard, tasks: viewTasks, shopping: viewShopping, home: viewHome, files: viewFiles, design: viewJackie, rh: viewRh, art: viewArt, settings: viewSettings };
 const route = () => { const h = location.hash.slice(1) === 'jackie' ? 'design' : location.hash.slice(1); return h in ROUTES ? h : 'dashboard'; };
 
 function renderView() {
@@ -815,6 +816,76 @@ function drawQr() {
 
 // ---------- Settings ----------
 
+// ---------- RH quotes ----------
+
+// Read-only view of the RH quotes (js/rh-quote-data.js): furniture and decor, by room.
+const RH_ROOMS = ['Foyer', 'Living Room', 'Dining Room', 'Guest Bedroom', 'Primary Bedroom'];
+const cents = (n) => M.formatMoney(n, { cents: true });
+
+function rhQuoteItem(p) {
+  const was = p.regular && p.regular > p.price
+    ? `<span class="muted small"><s>${money(p.salePrice || p.regular)}</s></span>` : '';
+  return `<article class="jk-product rh-item">
+    <img src="${esc(p.photo)}" alt="${esc(p.name)}" loading="lazy">
+    <div class="jk-body">
+      <div class="jk-meta"><span class="small"><b>${money(p.price)}</b> ${was}</span>${p.qty > 1 ? `<span class="pill">x${p.qty} = ${money(p.total)}</span>` : ''}</div>
+      <strong>${esc(p.name)}</strong>
+      ${p.details.length ? `<div class="small">${p.details.map(([k, v]) => `${esc(k)}: ${esc(v)}`).join(' · ')}</div>` : ''}
+      ${p.note ? `<div class="small"><b>Note:</b> ${esc(p.note)}</div>` : ''}
+      <div class="small muted">${esc(p.delivery)}${p.preorder ? ' (pre-order)' : ''}</div>
+      <div class="small muted">Item ${esc(p.itemNo)}${p.finalSale ? ' · <b class="rh-final">Final sale</b>' : ''}</div>
+    </div>
+  </article>`;
+}
+
+function viewRh() {
+  const Q = rhQuote;
+  const qPick = Q.quotes.some((q) => q.id === ui.rhQuote) ? ui.rhQuote : '';
+  const quotes = Q.quotes.filter((q) => !qPick || q.id === qPick);
+  const all = quotes.flatMap((q) => q.items.map((i) => ({ ...i, quote: q.label })));
+  const rooms = RH_ROOMS.filter((r) => all.some((i) => i.room === r));
+  const rPick = rooms.includes(ui.rhRoom) ? ui.rhRoom : '';
+  const grand = Q.quotes.reduce((n, q) => n + q.total, 0);
+  const seg = (act, cur, list) => `<div class="segmented">${list.map(([v, l]) => `<button class="${cur === v ? 'on' : ''}" data-act="${act}" data-v="${esc(v)}">${esc(l)}</button>`).join('')}</div>`;
+  return `
+  <div class="page-head"><div><h1>RH</h1><p>Quotes from ${esc(Q.designer)} at ${esc(Q.store)}, issued ${fmtDate(Q.issued)}. Project ${esc(Q.project)}.</p></div></div>
+
+  <div class="grid">
+    ${Q.quotes.map((q) => `<section class="card span-4">
+      <div class="card-head"><h2>${esc(q.label)}</h2><span class="muted small">${q.items.length} items</span></div>
+      <div class="rh-total">${cents(q.total)}</div>
+      <div class="kv small">
+        <span><b>Subtotal:</b> ${cents(q.subtotal)}</span>
+        <span><b>Member savings:</b> ${cents(q.savings)}</span>
+        ${q.delivery ? `<span><b>Delivery:</b> ${cents(q.delivery)}${q.surcharge ? ` + ${cents(q.surcharge)} surcharge` : ''}</span>` : ''}
+        <span><b>Tax:</b> ${cents(q.tax)}</span>
+        ${q.nonRefundable ? `<span><b>Custom items, non-refundable:</b> ${cents(q.nonRefundable)}</span>` : ''}
+      </div>
+    </section>`).join('')}
+    <section class="card span-4">
+      <div class="card-head"><h2>Both quotes</h2></div>
+      <div class="rh-total">${cents(grand)}</div>
+      <div class="kv small">
+        ${RH_ROOMS.map((r) => [r, Q.quotes.reduce((n, q) => n + (q.spaces[r] || 0), 0)]).filter(([, n]) => n).map(([r, n]) => `<span><b>${esc(r)}:</b> ${money(n)}</span>`).join('')}
+        <span class="muted">Room amounts are before delivery and tax.</span>
+      </div>
+      <p class="small" style="margin-bottom:0"><a href="mailto:${esc(Q.designerEmail)}">${esc(Q.designerEmail)}</a> · <a href="tel:${esc(Q.phone.replace(/\D/g, ''))}">${esc(Q.phone)}</a></p>
+    </section>
+  </div>
+
+  <div class="toolbar jk-filter">${seg('rh-quote', qPick, [['', 'Furniture and decor'], ...Q.quotes.map((q) => [q.id, q.label])])}</div>
+  <div class="toolbar jk-filter">${seg('rh-room', rPick, [['', 'All rooms'], ...rooms.map((r) => [r, r])])}</div>
+  ${rooms.filter((r) => !rPick || r === rPick).map((r) => {
+    const list = all.filter((i) => i.room === r);
+    const sum = list.reduce((n, i) => n + i.total, 0);
+    return `<section class="card jk-room">
+      <div class="card-head"><h2>${esc(r)}</h2><span class="muted small">${list.length} items · ${money(sum)}</span></div>
+      <div class="jk-grid">${list.map(rhQuoteItem).join('')}</div>
+    </section>`;
+  }).join('')}
+  <p class="small muted">${esc(Q.terms)}</p>`;
+}
+
 // ---------- Art ----------
 
 // Art photos can be a pasted image link or one of the app's own photos (assets/...).
@@ -1079,6 +1150,8 @@ document.addEventListener('click', async (e) => {
     case 'shop-view': ui.shopView = el.dataset.v; saveUi(); renderView(); break;
     case 'doc-kind': ui.docKind = el.dataset.v; saveUi(); renderView(); break;
     case 'jackie-room': ui.jackieRoom = el.dataset.v; saveUi(); renderView(); break;
+    case 'rh-quote': ui.rhQuote = el.dataset.v; saveUi(); renderView(); break;
+    case 'rh-room': ui.rhRoom = el.dataset.v; saveUi(); renderView(); break;
     case 'art-status': ui.artStatus = el.dataset.v; saveUi(); renderView(); break;
     case 'new-art': openArtEditor(); break;
     case 'edit-art': if (!e.target.closest('a')) openArtEditor(id); break;
