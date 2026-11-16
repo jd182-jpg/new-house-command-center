@@ -409,7 +409,7 @@ test('state keeps fields from a newer app, and unknown seed update parts stay pe
 
 test('budget: loan payment, year 1 split and schedule match a hand-checked 30 year loan', async () => {
   const { financeSummary, createFinance, normalizeState: norm } = await import('../js/model.js');
-  const s = financeSummary({ price: 600000, loan: 550000, rate: 5.1, years: 30, taxRate: 24, marketRate: 7.5, giftInterest: true,
+  const s = financeSummary({ price: 600000, loan: 550000, rate: 5.1, years: 30, taxRate: 24, giftInterest: true,
     monthly: [{ label: 'HOA', amount: 500 }] });
   assert.equal(s.payment, 2986.22);
   assert.equal(s.downPayment, 50000);
@@ -418,7 +418,6 @@ test('budget: loan payment, year 1 split and schedule match a hand-checked 30 ye
   assert.equal(s.schedule.at(-1).balance, 0);
   assert.equal(s.allIn, 3486.22);
   assert.equal(s.allInGifted, Math.round((s.year1Principal / 12 + 500) * 100) / 100);
-  assert.ok(s.marketPayment > s.payment);
   // Blank finance gets the default lines; strings with $ and commas parse; old states get a finance block.
   const f = createFinance({ price: '$614,584' });
   assert.equal(f.price, 614584);

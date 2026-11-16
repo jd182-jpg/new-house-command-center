@@ -192,7 +192,6 @@ export function createFinance(raw) {
     years: numOrNull(f.years) ?? 30,
     firstPayment: typeof f.firstPayment === 'string' ? f.firstPayment : '', // YYYY-MM
     lender: String(f.lender || ''),
-    marketRate: numOrNull(f.marketRate),
     taxRate: numOrNull(f.taxRate), // marginal federal rate, percent
     giftInterest: f.giftInterest === true,
     notes: String(f.notes || ''),
@@ -239,7 +238,6 @@ export function financeSummary(fin) {
   const schedule = principal ? amortizeByYear(principal, f.rate, f.years) : [];
   const y1 = schedule[0] || { interest: 0, principal: 0 };
   const monthlyCosts = sumLines(f.monthly);
-  const marketPayment = f.marketRate != null && principal ? Math.round(loanPayment(principal, f.marketRate, f.years) * 100) / 100 : null;
   return {
     payment,
     downPayment: f.price != null && f.loan != null ? Math.max(0, f.price - f.loan) : null,
@@ -253,8 +251,6 @@ export function financeSummary(fin) {
     // With year 1 interest gifted back, the cash out each month is principal plus costs.
     allInGifted: Math.round((y1.principal / 12 + monthlyCosts) * 100) / 100,
     taxSavings: f.taxRate != null ? Math.round(y1.interest * f.taxRate) / 100 : null,
-    marketPayment,
-    marketSavingsMonthly: marketPayment != null ? Math.round((marketPayment - payment) * 100) / 100 : null,
     oneTimeTotal: sumLines(f.oneTime),
   };
 }

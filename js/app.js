@@ -863,7 +863,6 @@ function viewBudget() {
         ${finInput('years', 'Term (years)', f.years)}
         ${finInput('firstPayment', 'First loan payment', f.firstPayment, { type: 'month' })}
         ${finInput('lender', 'Lender', f.lender, { type: 'text' })}
-        ${finInput('marketRate', 'Bank mortgage rate (%)', f.marketRate)}
         ${finInput('taxRate', 'Tax bracket (%)', f.taxRate)}
       </div>
       <label class="check-inline" style="margin-top:12px"><input type="checkbox" data-change="fin-gift" ${f.giftInterest ? 'checked' : ''}> Lender gifts the interest back</label>
@@ -876,7 +875,6 @@ function viewBudget() {
         <div><span>Year 1 principal</span><b>${c2(S.year1Principal)}</b><em>About ${c2(S.year1PrincipalMonthly)} a month</em></div>
         ${f.giftInterest ? `<div class="hl"><span>Cash out each month, interest gifted</span><b>${c2(S.year1PrincipalMonthly)}</b><em>Principal only in year 1, before monthly costs</em></div>` : ''}
         <div><span>Deductible mortgage interest, year 1</span><b>${c2(S.year1Interest)}</b>${S.taxSavings != null ? `<em>Saves about ${c2(S.taxSavings)} in federal tax if you itemize</em>` : '<em>Add your tax bracket to estimate the savings</em>'}</div>
-        ${S.marketPayment != null ? `<div><span>Same loan at ${f.marketRate}% from a bank</span><b>${c2(S.marketPayment)}/mo</b><em>${c2(S.marketSavingsMonthly)} a month more than this loan</em></div>` : ''}
         <div><span>Interest over the full term</span><b>${c2(S.totalInterest)}</b><em>If never refinanced or paid down early</em></div>
       </div>` : '<p class="muted">Enter the loan amount and rate to see the payment and schedule.</p>'}
     </section>
