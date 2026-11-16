@@ -170,6 +170,95 @@ export function createArt(fields = {}) {
   };
 }
 
+// ---------- Budget (purchase, family loan, monthly costs) ----------
+
+// The figures live only in synced data, never in this public code.
+export const DEFAULT_MONTHLY = ['HOA dues', 'Property tax', 'Homeowners insurance (HO6)', 'Electric and gas', 'Water', 'Internet'];
+export const DEFAULT_ONE_TIME = ['Down payment', 'Closing costs'];
+
+const numOrNull = (v) => (v === '' || v == null ? null : num(v, null));
+
+export function createBudgetLine(fields = {}) {
+  return { id: fields.id || makeId('bl'), label: String(fields.label || '').trim(), amount: numOrNull(fields.amount), note: String(fields.note || '') };
+}
+
+export function createFinance(raw) {
+  const f = raw && typeof raw === 'object' ? raw : {};
+  const lines = (list, defaults) => (Array.isArray(list) ? list : defaults.map((label) => ({ label }))).map(createBudgetLine);
+  return {
+    price: numOrNull(f.price),
+    loan: numOrNull(f.loan),
+    rate: numOrNull(f.rate), // annual percent, e.g. 5.1
+    years: numOrNull(f.years) ?? 30,
+    firstPayment: typeof f.firstPayment === 'string' ? f.firstPayment : '', // YYYY-MM
+    lender: String(f.lender || ''),
+    marketRate: numOrNull(f.marketRate),
+    taxRate: numOrNull(f.taxRate), // marginal federal rate, percent
+    giftInterest: f.giftInterest === true,
+    notes: String(f.notes || ''),
+    monthly: lines(f.monthly, DEFAULT_MONTHLY),
+    oneTime: lines(f.oneTime, DEFAULT_ONE_TIME),
+  };
+}
+
+// Level monthly payment on a fully amortizing loan.
+export function loanPayment(principal, annualRate, years) {
+  if (!(principal > 0) || !(years > 0)) return 0;
+  const n = Math.round(years * 12);
+  const r = (annualRate || 0) / 100 / 12;
+  if (r === 0) return principal / n;
+  return (principal * r) / (1 - Math.pow(1 + r, -n));
+}
+
+// Year by year: interest, principal and balance at year end (payments rounded to cents).
+export function amortizeByYear(principal, annualRate, years) {
+  const pay = Math.round(loanPayment(principal, annualRate, years) * 100) / 100;
+  const r = (annualRate || 0) / 100 / 12;
+  const n = Math.round(years * 12);
+  const out = [];
+  let bal = principal;
+  for (let m = 0; m < n && bal > 0.005; m++) {
+    const yi = Math.floor(m / 12);
+    if (!out[yi]) out[yi] = { year: yi + 1, interest: 0, principal: 0, paid: 0, balance: 0 };
+    const int = Math.round(bal * r * 100) / 100;
+    const prin = Math.min(bal, (m === n - 1 ? bal + int : pay) - int);
+    bal = Math.round((bal - prin) * 100) / 100;
+    const y = out[yi];
+    y.interest += int; y.principal += prin; y.paid += int + prin; y.balance = bal;
+  }
+  for (const y of out) for (const k of ['interest', 'principal', 'paid']) y[k] = Math.round(y[k] * 100) / 100;
+  return out;
+}
+
+const sumLines = (lines) => Math.round(lines.reduce((n, l) => n + (Number.isFinite(l.amount) ? l.amount : 0), 0) * 100) / 100;
+
+export function financeSummary(fin) {
+  const f = createFinance(fin);
+  const principal = f.loan || 0;
+  const payment = Math.round(loanPayment(principal, f.rate, f.years) * 100) / 100;
+  const schedule = principal ? amortizeByYear(principal, f.rate, f.years) : [];
+  const y1 = schedule[0] || { interest: 0, principal: 0 };
+  const monthlyCosts = sumLines(f.monthly);
+  const marketPayment = f.marketRate != null && principal ? Math.round(loanPayment(principal, f.marketRate, f.years) * 100) / 100 : null;
+  return {
+    payment,
+    downPayment: f.price != null && f.loan != null ? Math.max(0, f.price - f.loan) : null,
+    schedule,
+    year1Interest: y1.interest,
+    year1Principal: y1.principal,
+    year1PrincipalMonthly: Math.round((y1.principal / 12) * 100) / 100,
+    totalInterest: Math.round(schedule.reduce((n, y) => n + y.interest, 0) * 100) / 100,
+    monthlyCosts,
+    allIn: Math.round((payment + monthlyCosts) * 100) / 100,
+    // With year 1 interest gifted back, the cash out each month is principal plus costs.
+    allInGifted: Math.round((y1.principal / 12 + monthlyCosts) * 100) / 100,
+    taxSavings: f.taxRate != null ? Math.round(y1.interest * f.taxRate) / 100 : null,
+    marketPayment,
+    marketSavingsMonthly: marketPayment != null ? Math.round((marketPayment - payment) * 100) / 100 : null,
+    oneTimeTotal: sumLines(f.oneTime),
+  };
+}
+
 // Builds a fresh app state from the seed module.
 export function buildStateFromSeed(seed) {
   const base = normalizeState({
@@ -212,6 +301,7 @@ export function normalizeState(raw) {
     appointments: Array.isArray(raw.appointments) ? raw.appointments.map(createAppointment) : [],
     documents: Array.isArray(raw.documents) ? raw.documents.map(createDocument) : [],
     art: Array.isArray(raw.art) ? raw.art.map(createArt) : [],
+    finance: createFinance(raw.finance),
     appliedUpdates: Array.isArray(raw.appliedUpdates) ? raw.appliedUpdates.filter((x) => typeof x === 'string') : [],
     // Milliseconds of the last edit. 0 means untouched seed data, so any real copy beats it.
     updatedAt: Number.isFinite(raw.updatedAt) && raw.updatedAt > 0 ? raw.updatedAt : 0,
@@ -219,7 +309,7 @@ export function normalizeState(raw) {
 }
 
 const KNOWN_STATE_KEYS = ['version', 'settings', 'tasks', 'items', 'homeInfo', 'rooms', 'appointments',
-  'documents', 'art', 'appliedUpdates', 'updatedAt'];
+  'documents', 'art', 'finance', 'appliedUpdates', 'updatedAt'];
 
 // ---------- Seed updates ----------
 

@@ -175,7 +175,7 @@ function togglePurchased(item, purchasedStatus = 'Ordered') {
 
 // ---------- Router ----------
 
-const ROUTES = { dashboard: viewDashboard, tasks: viewTasks, shopping: viewShopping, home: viewHome, files: viewFiles, design: viewJackie, rh: viewRh, art: viewArt, settings: viewSettings };
+const ROUTES = { dashboard: viewDashboard, tasks: viewTasks, shopping: viewShopping, home: viewHome, files: viewFiles, design: viewJackie, rh: viewRh, art: viewArt, budget: viewBudget, settings: viewSettings };
 const route = () => { const h = location.hash.slice(1) === 'jackie' ? 'design' : location.hash.slice(1); return h in ROUTES ? h : 'dashboard'; };
 
 function renderView() {
@@ -816,6 +816,104 @@ function drawQr() {
 
 // ---------- Settings ----------
 
+// ---------- Budget ----------
+
+// Purchase, the family loan, and monthly and one-time costs. Figures live in synced data (state.finance).
+function finInput(key, label, value, { type = 'number', step = 'any', hint = '' } = {}) {
+  return `<label class="field">${esc(label)}<input type="${type}" ${type === 'number' ? `step="${step}" inputmode="decimal"` : ''} data-change="fin" data-key="${key}" value="${esc(value ?? '')}">${hint ? `<span class="small muted">${hint}</span>` : ''}</label>`;
+}
+
+function finLines(list, lines) {
+  return `<div class="bl-list">${lines.map((l) => `<div class="bl-row">
+      <input aria-label="Label" placeholder="Label" data-change="fin-line" data-list="${list}" data-id="${l.id}" data-k="label" value="${esc(l.label)}">
+      <input aria-label="Amount" placeholder="$" type="number" step="any" inputmode="decimal" class="bl-amt" data-change="fin-line" data-list="${list}" data-id="${l.id}" data-k="amount" value="${l.amount ?? ''}">
+      <button class="icon-btn" type="button" aria-label="Remove ${esc(l.label || 'line')}" data-act="fin-del-line" data-list="${list}" data-id="${l.id}">&times;</button>
+      <input aria-label="Note" placeholder="Note or source" class="bl-note" data-change="fin-line" data-list="${list}" data-id="${l.id}" data-k="note" value="${esc(l.note)}">
+    </div>`).join('')}</div>
+    <button class="btn" type="button" data-act="fin-add-line" data-list="${list}">+ Add a line</button>`;
+}
+
+function viewBudget() {
+  const f = state.finance || M.createFinance();
+  const S = M.financeSummary(f);
+  const c2 = (n) => (n == null ? '' : cents(n));
+  const hasLoan = f.loan > 0 && f.rate != null;
+  const intShare = S.payment ? Math.round(((S.year1Interest / 12) / S.payment) * 100) : 0;
+  const start = /^\d{4}-\d{2}$/.test(f.firstPayment) ? new Date(Number(f.firstPayment.slice(0, 4)), Number(f.firstPayment.slice(5)) - 1, 1) : null;
+  const yearFrom = (y) => start ? new Date(start.getFullYear() + y - 1, start.getMonth(), 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '';
+  const artTotal = (state.art || []).reduce((n, a) => n + (Number.isFinite(a.price) ? a.price : 0), 0);
+  const rhTotal = rhQuote.quotes.reduce((n, q) => n + q.total, 0);
+  const oneTimeAll = S.oneTimeTotal + rhTotal + artTotal;
+  const stat = (label, value, sub = '') => `<div class="stat"><span>${esc(label)}</span><strong>${value || '<span class="muted">Not set</span>'}</strong>${sub ? `<span>${sub}</span>` : ''}</div>`;
+  return `
+  <div class="page-head"><div><h1>Budget</h1><p>The purchase, the family loan, and what the house costs each month. Every number here is editable and syncs.</p></div></div>
+
+  <div class="stat-row fin-stats">
+    ${stat('Purchase price', money(f.price), S.downPayment != null ? `${money(S.downPayment)} down` : '')}
+    ${stat('Loan payment', hasLoan ? `${c2(S.payment)}/mo` : '', hasLoan ? `${f.rate}% for ${f.years} years` : '')}
+    ${stat('All in, monthly', hasLoan || S.monthlyCosts ? `${c2(f.giftInterest ? S.allInGifted : S.allIn)}` : '', f.giftInterest ? 'Year 1, with interest gifted back' : 'Loan plus monthly costs')}
+  </div>
+
+  <div class="grid fin-grid">
+    <section class="card span-6"><h2>Purchase and loan</h2>
+      <div class="form-grid">
+        ${finInput('price', 'Purchase price', f.price)}
+        ${finInput('loan', 'Loan amount', f.loan)}
+        ${finInput('rate', 'Interest rate (AFR, %)', f.rate)}
+        ${finInput('years', 'Term (years)', f.years)}
+        ${finInput('firstPayment', 'First loan payment', f.firstPayment, { type: 'month' })}
+        ${finInput('lender', 'Lender', f.lender, { type: 'text' })}
+        ${finInput('marketRate', 'Bank mortgage rate (%)', f.marketRate)}
+        ${finInput('taxRate', 'Tax bracket (%)', f.taxRate)}
+      </div>
+      <label class="check-inline" style="margin-top:12px"><input type="checkbox" data-change="fin-gift" ${f.giftInterest ? 'checked' : ''}> Lender gifts the interest back</label>
+    </section>
+
+    <section class="card span-6"><h2>What it works out to</h2>
+      ${hasLoan ? `<div class="fin-facts">
+        <div><span>Monthly payment</span><b>${c2(S.payment)}</b></div>
+        <div><span>Year 1 interest</span><b>${c2(S.year1Interest)}</b><em>About ${intShare}% of each early payment</em></div>
+        <div><span>Year 1 principal</span><b>${c2(S.year1Principal)}</b><em>About ${c2(S.year1PrincipalMonthly)} a month</em></div>
+        ${f.giftInterest ? `<div class="hl"><span>Cash out each month, interest gifted</span><b>${c2(S.year1PrincipalMonthly)}</b><em>Principal only in year 1, before monthly costs</em></div>` : ''}
+        <div><span>Deductible mortgage interest, year 1</span><b>${c2(S.year1Interest)}</b>${S.taxSavings != null ? `<em>Saves about ${c2(S.taxSavings)} in federal tax if you itemize</em>` : '<em>Add your tax bracket to estimate the savings</em>'}</div>
+        ${S.marketPayment != null ? `<div><span>Same loan at ${f.marketRate}% from a bank</span><b>${c2(S.marketPayment)}/mo</b><em>${c2(S.marketSavingsMonthly)} a month more than this loan</em></div>` : ''}
+        <div><span>Interest over the full term</span><b>${c2(S.totalInterest)}</b><em>If never refinanced or paid down early</em></div>
+      </div>` : '<p class="muted">Enter the loan amount and rate to see the payment and schedule.</p>'}
+    </section>
+
+    <section class="card span-6"><div class="card-head"><h2>Monthly costs</h2><span class="muted small">${c2(S.monthlyCosts)}/mo</span></div>
+      ${finLines('monthly', f.monthly)}
+      <div class="fin-total">
+        <div><span>Loan payment</span><b>${c2(S.payment)}</b></div>
+        <div><span>Monthly costs</span><b>${c2(S.monthlyCosts)}</b></div>
+        <div class="sum"><span>All in</span><b>${c2(S.allIn)}</b></div>
+        ${f.giftInterest ? `<div class="sum"><span>All in, interest gifted (year 1)</span><b>${c2(S.allInGifted)}</b></div>` : ''}
+      </div>
+    </section>
+
+    <section class="card span-6"><div class="card-head"><h2>One-time costs</h2><span class="muted small">${c2(oneTimeAll)}</span></div>
+      ${finLines('oneTime', f.oneTime)}
+      <div class="fin-total">
+        <div><span>Lines above</span><b>${c2(S.oneTimeTotal)}</b></div>
+        <div><span><a href="#rh">RH quotes</a> (furniture and decor)</span><b>${c2(rhTotal)}</b></div>
+        <div><span><a href="#art">Art</a> with prices</span><b>${c2(artTotal)}</b></div>
+        <div class="sum"><span>Total</span><b>${c2(oneTimeAll)}</b></div>
+      </div>
+    </section>
+
+    <section class="card span-12"><h2>Notes</h2>
+      <textarea rows="5" data-change="fin" data-key="notes" placeholder="How the loan is set up, documents to sign, when to revisit the rate.">${esc(f.notes)}</textarea>
+    </section>
+
+    ${hasLoan ? `<section class="card span-12"><div class="card-head"><h2>Loan schedule by year</h2><span class="muted small">${c2(S.payment)} a month</span></div>
+      <div class="table-wrap fin-sched"><table><thead><tr><th>Year</th><th class="num">Interest</th><th class="num">Principal</th><th class="num">Balance</th></tr></thead><tbody>
+      ${S.schedule.map((y) => `<tr><td>${y.year}${start ? ` <span class="muted small">from ${yearFrom(y.year)}</span>` : ''}</td><td class="num">${c2(y.interest)}</td><td class="num">${c2(y.principal)}</td><td class="num">${c2(y.balance)}</td></tr>`).join('')}
+      </tbody></table></div>
+      <p class="small muted" style="margin-bottom:0">Balance is at the end of each loan year, counted from the first payment. A new note can change the rate at any time, so revisit this if rates drop.</p>
+    </section>` : ''}
+  </div>`;
+}
+
 // ---------- RH quotes ----------
 
 // Read-only view of the RH quotes (js/rh-quote-data.js): furniture and decor, by room.
@@ -1152,6 +1250,8 @@ document.addEventListener('click', async (e) => {
     case 'jackie-room': ui.jackieRoom = el.dataset.v; saveUi(); renderView(); break;
     case 'rh-quote': ui.rhQuote = el.dataset.v; saveUi(); renderView(); break;
     case 'rh-room': ui.rhRoom = el.dataset.v; saveUi(); renderView(); break;
+    case 'fin-add-line': commit((s) => { s.finance = M.createFinance(s.finance); s.finance[el.dataset.list].push(M.createBudgetLine()); }); break;
+    case 'fin-del-line': commit((s) => { s.finance[el.dataset.list] = s.finance[el.dataset.list].filter((l) => l.id !== el.dataset.id); }); break;
     case 'art-status': ui.artStatus = el.dataset.v; saveUi(); renderView(); break;
     case 'new-art': openArtEditor(); break;
     case 'edit-art': if (!e.target.closest('a')) openArtEditor(id); break;
@@ -1277,6 +1377,15 @@ document.addEventListener('change', async (e) => {
     const key = el.dataset.key;
     commit((s) => { s.settings[key] = el.value; });
     if (key === 'theme') applyTheme();
+  } else if (kind === 'fin') {
+    commit((s) => { s.finance = M.createFinance({ ...s.finance, [el.dataset.key]: el.value }); });
+  } else if (kind === 'fin-gift') {
+    commit((s) => { s.finance = M.createFinance({ ...s.finance, giftInterest: el.checked }); });
+  } else if (kind === 'fin-line') {
+    commit((s) => {
+      const l = s.finance[el.dataset.list].find((x) => x.id === el.dataset.id);
+      Object.assign(l, M.createBudgetLine({ ...l, [el.dataset.k]: el.value }));
+    });
   } else if (kind === 'sync-wifi') {
     commit((s) => { s.settings.syncWifiPasswords = el.checked; });
     toast(el.checked ? 'Wi-Fi passwords will sync.' : 'Wi-Fi passwords now stay on each device.');
